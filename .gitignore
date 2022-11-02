@@ -1,0 +1,7 @@
+draft.py
+dist
+scip_routing.egg-info
+build
+.idea
+.pytest_cache
+scip_routing/__pycache__
