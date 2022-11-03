@@ -78,7 +78,7 @@ class Pricer(scip.Pricer):
                            names=["-".join(map(str, path))],
                            types=['C'])
 
-    def find_path(self, duals, added_paths):
+    def find_path(self, duals):
         unprocessed = {}
         processed = {}
 
@@ -184,11 +184,10 @@ class Pricer(scip.Pricer):
 
         while True:
             something_added = False
-            for path, cost, redcost in self.find_path(duals, self.added_paths):
+            for path, cost, redcost in self.find_path(duals):
                 if redcost < -1e-08 and str(path) not in self.added_paths:
                     something_added = True
                     n_added_paths += 1
-                    # print(path, redcost)
                     var = self.model.addVar(name=f"var-{str(path)}", lb=0, ub=float("inf"), obj=cost, vtype="C",
                                             pricedVar=True)
                     self.added_paths[str(path)] = var
