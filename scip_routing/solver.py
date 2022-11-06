@@ -33,4 +33,4 @@ class VRPTWSolver:
         self.rmp.setPresolve(scip.SCIP_PARAMSETTING.OFF)
         self.rmp.disablePropagation()
         self.rmp.optimize()
-        print(self.rmp.getBestSol())
+        # print(self.rmp.getBestSol())

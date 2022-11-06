@@ -114,8 +114,8 @@ class Pricer(scip.Pricer):
         best_path_redcost = float("inf")
         if processed[self.end_depot]:
             for label in processed[self.end_depot]:
-                # if label.cost < -1e-08:
-                #     yield *self.path_from_label(label), label.cost
+                if label.cost < -1e-08:
+                    yield *self.path_from_label(label), label.cost
                 if label.cost < best_path_redcost:
                     best_path_label = label
                     best_path_redcost = label.cost
@@ -178,7 +178,6 @@ class Pricer(scip.Pricer):
             duals[i + 1] = self.model.getDualsolLinear(c)
         duals[self.end_depot] = 0
 
-        # assert str(paths[0]) not in self.added_paths
         n_added_paths = 0
         self.elementary = True
 
@@ -188,7 +187,7 @@ class Pricer(scip.Pricer):
                 if redcost < -1e-8 and str(path) not in self.added_paths:
                     something_added = True
                     n_added_paths += 1
-                    print(path, redcost)
+                    # print(path, redcost)
 
                     var = self.model.addVar(name=f"var-{str(path)}", obj=cost, vtype="C",
                                             pricedVar=True)
