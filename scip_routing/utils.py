@@ -24,8 +24,8 @@ def instance_graph(instance: VRPTW):
 
 def minify_instance(instance, only_first):
     instance.customers = instance.customers[:only_first]
-    instance.earliest = instance.earliest[:only_first]
-    instance.latest = instance.latest[:only_first]
-    instance.demands = instance.demands[:only_first]
-    instance.n_customers = only_first - 1
+    instance.earliest = instance.earliest[:only_first + 1]
+    instance.latest = instance.latest[:only_first + 1]
+    instance.demands = instance.demands[:only_first + 1]
+    instance.n_customers = only_first
     return instance

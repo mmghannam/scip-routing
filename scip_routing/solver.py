@@ -21,7 +21,7 @@ class VRPTWSolver:
             var_name = f"{self.start_depot}-{customer}-{self.end_depot}"
             cost = self.pricer.graph[self.start_depot][customer]["distance"] + \
                    self.pricer.graph[customer][self.end_depot]["distance"]
-            var = rmp.addVar(obj=cost, name=var_name)
+            var = rmp.addVar(obj=cost, name=var_name, vtype="B")
             rmp.addCons(var == 1, separate=False, modifiable=True)
         rmp.setMinimize()
         if not self.verbose:

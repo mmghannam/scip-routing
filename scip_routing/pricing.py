@@ -175,7 +175,7 @@ class Pricer(scip.Pricer):
     def pricerredcost(self, *args, **kwargs):
         duals = {self.start_depot: 0}
         for i, c in enumerate(self.init_cons):
-            duals[i] = self.model.getDualsolLinear(c)
+            duals[i + 1] = self.model.getDualsolLinear(c)
         duals[self.end_depot] = 0
 
         # assert str(paths[0]) not in self.added_paths
