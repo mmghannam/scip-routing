@@ -173,10 +173,10 @@ class Pricer(scip.Pricer):
         return is_less_or_eq and one_is_strictly_less and visited_less
 
     def pricerredcost(self, *args, **kwargs):
-        duals = [0]
+        duals = {self.start_depot: 0}
         for i, c in enumerate(self.init_cons):
-            duals.append(self.model.getDualsolLinear(c))
-        duals.append(0)  # end depot dual is the same as the start depot
+            duals[i] = self.model.getDualsolLinear(c)
+        duals[self.end_depot] = 0
 
         # assert str(paths[0]) not in self.added_paths
         n_added_paths = 0
@@ -185,10 +185,12 @@ class Pricer(scip.Pricer):
         while True:
             something_added = False
             for path, cost, redcost in self.find_path(duals):
-                if redcost < -1e-08 and str(path) not in self.added_paths:
+                if redcost < -1e-8 and str(path) not in self.added_paths:
                     something_added = True
                     n_added_paths += 1
-                    var = self.model.addVar(name=f"var-{str(path)}", lb=0, ub=float("inf"), obj=cost, vtype="C",
+                    print(path, redcost)
+
+                    var = self.model.addVar(name=f"var-{str(path)}", obj=cost, vtype="C",
                                             pricedVar=True)
                     self.added_paths[str(path)] = var
                     cust_i_in_path = defaultdict(lambda: 0)
@@ -204,7 +206,6 @@ class Pricer(scip.Pricer):
                 self.first_found = False
             else:
                 break
-
 
         return {"result": scip.SCIP_RESULT.SUCCESS}
 

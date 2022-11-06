@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="scip_routing",
-    version="0.1.0",
+    version="0.2.1",
     description="A basic VRPTW Branch-and-Price solver",
     long_description=readme_text,
     long_description_content_type="text/markdown",

@@ -29,4 +29,8 @@ class VRPTWSolver:
         return rmp
 
     def solve(self):
+        self.rmp.setHeuristics(scip.SCIP_PARAMSETTING.OFF)
+        self.rmp.setPresolve(scip.SCIP_PARAMSETTING.OFF)
+        self.rmp.disablePropagation()
         self.rmp.optimize()
+        print(self.rmp.getBestSol())
