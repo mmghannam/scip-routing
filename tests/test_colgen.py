@@ -17,4 +17,4 @@ def test_finds_optimal():
 
     solver.solve()
 
-    assert solver.rmp.getObjVal() == 742
+    assert solver.rmp.getObjVal() == 507
