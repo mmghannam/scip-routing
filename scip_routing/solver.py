@@ -1,3 +1,7 @@
+from collections import defaultdict
+
+from scip_routing.edge_brancher import EdgeBrancher
+from scip_routing.edge_branching_eventhdlr import EdgeBranchingEventhdlr
 from scip_routing.pricing import Pricer
 import pyscipopt as scip
 
@@ -7,7 +11,9 @@ class VRPTWSolver:
         self.start_depot = instance.depot
         self.end_depot = instance.n_customers + 1
         self.customers = instance.customers
-        self.pricer = Pricer(graph, instance, distance_fn=distance_fn)
+        self.deleted_edges_from_node = defaultdict(lambda: set())
+        self.graph = graph
+        self.pricer = Pricer(graph, instance, deleted_edges_from_node=self.deleted_edges_from_node, distance_fn=distance_fn)
         self.verbose = verbose
         self.rmp = self.init_rmp()
         init_cons = list(self.rmp.getConss())
@@ -32,5 +38,14 @@ class VRPTWSolver:
         self.rmp.setHeuristics(scip.SCIP_PARAMSETTING.OFF)
         self.rmp.setPresolve(scip.SCIP_PARAMSETTING.OFF)
         self.rmp.disablePropagation()
+
+        # include edge branching rule and its event handler
+        branching_rule = EdgeBrancher(self.graph, self.deleted_edges_from_node)
+        self.rmp.includeBranchrule(branching_rule, "Edge Branching Rule", "", priority=1000000, maxdepth=-1,
+                                   maxbounddist=1)
+        eventhdlr = EdgeBranchingEventhdlr(self.deleted_edges_from_node)
+        self.rmp.includeEventhdlr(eventhdlr, "Edge Branching Event Handler", "")
+
+
         self.rmp.optimize()
         # print(self.rmp.getBestSol())

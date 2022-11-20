@@ -23,9 +23,10 @@ class Pricer(scip.Pricer):
     Solver for the Resource Constrained Shortest Path Problem, implements a basic Labeling Algorithm.
     """
 
-    def __init__(self, graph, instance, distance_fn=None):
+    def __init__(self, graph, instance, deleted_edges_from_node=set(), distance_fn=None):
         super().__init__()
         self.graph = graph
+        self.deleted_edges_from_node = deleted_edges_from_node
         self.start_depot = instance.depot
         self.end_depot = instance.n_customers + 1
         self.earliest = instance.earliest + [instance.earliest[self.start_depot]]
@@ -82,6 +83,7 @@ class Pricer(scip.Pricer):
         unprocessed = {}
         processed = {}
 
+        deleted_edges = self.deleted_edges_from_node[self.model.getCurrentNode().getNumber()]
         for i in range(self.ncustomers + 2):  # customers + end depot
             unprocessed[i] = set()
             processed[i] = set()
@@ -96,6 +98,7 @@ class Pricer(scip.Pricer):
             next_node_to_expand = label_to_expand.last_node
             for neighbor in nx.neighbors(self.graph, next_node_to_expand):
                 if neighbor in label_to_expand.visited: continue
+                if (next_node_to_expand, neighbor) in deleted_edges: continue
                 demand, last_visited, redcost, earliest_time, visited = self.expand_label(duals, label_to_expand,
                                                                                           neighbor,
                                                                                           next_node_to_expand)
