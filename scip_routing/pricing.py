@@ -1,3 +1,4 @@
+import heapq
 from collections import defaultdict
 
 import networkx as nx
@@ -16,6 +17,9 @@ class Label:
         else:
             self.visited = set()
         self.last_label = last_label
+
+    def __lt__(self, other):
+        return self.earliest_time < other.earliest_time
 
 
 class Pricer(scip.Pricer):
@@ -88,13 +92,13 @@ class Pricer(scip.Pricer):
             unprocessed[i] = set()
             processed[i] = set()
 
-        unprocessed[self.start_depot] = {Label(self.start_depot, 0, 0, 0, None)}
-        unprocessed_count = 1
+        start_label = Label(self.start_depot, 0, 0, 0, None)
+        unprocessed[self.start_depot] = {start_label}
+        label_queue = [(start_label.earliest_time, start_label.cost, start_label)]
+        removed_labels = set()
 
-        while unprocessed_count > 0:
-            label_to_expand = self.choose_label_to_expand(unprocessed)
-            unprocessed_count -= 1
-            # print('***', unprocessed_count)
+        while label_queue:
+            label_to_expand = self.choose_label_to_expand(label_queue, removed_labels)
             next_node_to_expand = label_to_expand.last_node
             for neighbor in nx.neighbors(self.graph, next_node_to_expand):
                 if neighbor in label_to_expand.visited: continue
@@ -108,9 +112,11 @@ class Pricer(scip.Pricer):
                 if self.is_feasible(demand, earliest_time, neighbor):
                     dominated = self.dominance_check({new_label}, processed[neighbor] | unprocessed[neighbor])
                     if len(dominated) == 0:
+                        heapq.heappush(label_queue,
+                                       (new_label.earliest_time, new_label.cost, new_label))
                         dominated = self.dominance_check(unprocessed[neighbor], {new_label})
+                        removed_labels |= dominated
                         unprocessed[neighbor] = (unprocessed[neighbor] - dominated) | {new_label}
-                        unprocessed_count += 1 - len(dominated)
             processed[next_node_to_expand].add(label_to_expand)
 
         best_path_label = None
@@ -124,6 +130,15 @@ class Pricer(scip.Pricer):
                     best_path_redcost = label.cost
         best_path, best_path_travel_cost = self.path_from_label(best_path_label)
         yield best_path, best_path_travel_cost, best_path_redcost
+
+    def choose_label_to_expand(self, label_heap, removed_labels):
+        while label_heap:
+            *_, label = heapq.heappop(label_heap)
+            if label not in removed_labels:
+                return label
+            else:
+                removed_labels.remove(label)  # this is done for the set size to not blow up
+        return None
 
     def is_feasible(self, demand, earliest_time, neighbor):
         return demand <= self.capacity and earliest_time <= self.latest[neighbor]
@@ -155,15 +170,6 @@ class Pricer(scip.Pricer):
                     break
         return dominated
 
-    @staticmethod
-    def choose_label_to_expand(unprocessed):
-        # todo: choose one with min time
-        # returns first label it sees
-        for customer, labels in unprocessed.items():
-            if len(labels):
-                return labels.pop()
-        return None
-
     def dominates(self, label_a, label_b):
         is_less_or_eq = label_a.cost <= label_b.cost and label_a.demand <= label_b.demand and \
                         label_a.earliest_time <= label_b.earliest_time
@@ -183,11 +189,14 @@ class Pricer(scip.Pricer):
 
         n_added_paths = 0
         self.elementary = True
+        min_redcost = float("inf")
 
         while True:
             something_added = False
             for path, cost, redcost in self.find_path(duals):
                 if redcost < -1e-8 and str(path) not in self.added_paths:
+                    if redcost < min_redcost and self.elementary:
+                        min_redcost = redcost
                     something_added = True
                     n_added_paths += 1
                     # print(path, redcost)
@@ -209,6 +218,7 @@ class Pricer(scip.Pricer):
             else:
                 break
 
+        print("LP obj:", self.model.getLPObjVal())
         return {"result": scip.SCIP_RESULT.SUCCESS}
 
     def pricerinit(self):
