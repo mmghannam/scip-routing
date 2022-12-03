@@ -8,23 +8,8 @@ fn rs_pricing(_py: Python, m: &PyModule) -> PyResult<()> {
     Ok(())
 }
 
-// class Label:
-//     def __init__(self, last_node, cost, demand, earliest_time, last_label, visited=None):
-//         self.last_node = last_node
-//         self.cost = cost
-//         self.demand = demand
-//         self.earliest_time = earliest_time
-//         if visited is not None:
-//             self.visited = visited
-//         else:
-//             self.visited = set()
-//         self.last_label = last_label
-
-//     def __lt__(self, other):
-//         return self.earliest_time < other.earliest_time
-
-#[derive(Debug)]
-struct Label<'a> {
+#[derive(Debug, Clone)]
+struct Label {
     id: usize,
     last_node: usize,
     cost: f64,
@@ -32,10 +17,9 @@ struct Label<'a> {
     demand: f64,
     earliest_time: usize,
     visited: HashSet<usize>,
-    last_label: Option<Box<&'a Label<'a>>>,
 }
 
-impl<'a> Label<'a> {
+impl Label {
     fn new(
         id: usize,
         last_node: usize,
@@ -44,7 +28,6 @@ impl<'a> Label<'a> {
         demand: f64,
         earliest_time: usize,
         visited: HashSet<usize>,
-        last_label: Option<Box<&Label<'a>>>,
     ) -> Self {
         Self {
             id,
@@ -54,20 +37,19 @@ impl<'a> Label<'a> {
             demand,
             earliest_time,
             visited,
-            last_label,
         }
     }
 }
 
-impl PartialEq for Label<'_> {
+impl PartialEq for Label {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl Eq for Label<'_> {}
+impl Eq for Label {}
 
-impl Hash for Label<'_> {
+impl Hash for Label {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
@@ -119,8 +101,10 @@ impl Pricer {
         duals: HashMap<usize, f64>,
         deleted_edges: HashSet<(usize, usize)>,
     ) -> (Vec<usize>, f64, f64) {
-        let mut processed = HashMap::<usize, HashSet<&Label>>::new();
-        let mut unprocessed = HashMap::<usize, HashSet<&Label>>::new();
+        let mut processed = HashMap::<usize, HashSet<Label>>::new();
+        let mut unprocessed = HashMap::<usize, HashSet<Label>>::new();
+
+        let mut pred = HashMap::<usize, Label>::new();
 
         for customer in self.customers.iter() {
             unprocessed.insert(*customer, HashSet::new());
@@ -137,20 +121,20 @@ impl Pricer {
             0.0,
             self.time_windows[self.start_depot].0,
             HashSet::new(),
-            None,
         );
 
         current_label_id += 1;
 
-        let mut label_queue = Vec::<&Label>::new();
+        let mut label_queue = Vec::<Label>::new();
 
-        label_queue.push(&start_label);
+        label_queue.push(start_label.clone());
+        
         unprocessed
             .get_mut(&self.start_depot)
             .unwrap()
-            .insert(&start_label);
+            .insert(start_label.clone());
 
-        while let Some(label_to_expand) = label_queue.pop() {
+            while let Some(label_to_expand) = label_queue.pop() {
             let next_node_to_expand = label_to_expand.last_node as usize;
             let neighbors = self.neighbors.get(&next_node_to_expand).unwrap();
             for neighbor in neighbors {
@@ -162,24 +146,25 @@ impl Pricer {
                 }
 
                 let new_label =
-                    self.expand_label(label_to_expand, *neighbor, &duals, &mut current_label_id);
+                    self.expand_label(&label_to_expand, *neighbor, &duals, &mut current_label_id);
 
                 if self.is_feasible(&new_label) {
                     let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
-                    if !self.is_dominated(&new_label, label_set_at_node) {
-                        label_queue.push(&new_label);
-                        let dominated = self.dominated_by(&new_label, label_set_at_node);
+                    if !self.is_dominated(new_label.clone(), label_set_at_node) {
+                        label_queue.push(new_label.clone());
+                        pred.insert(new_label.id, label_to_expand.clone());
+                        let dominated = self.dominated_by(new_label.clone(), &label_set_at_node);
                         for label in dominated {
-                            label_set_at_node.remove(label);
+                            label_set_at_node.remove(&label);
                         }
-                        label_set_at_node.insert(&new_label);
+                        label_set_at_node.insert(new_label.clone());
                     }
                 }
             }
             processed
                 .get_mut(&next_node_to_expand)
                 .unwrap()
-                .insert(label_to_expand);
+                .insert(label_to_expand.clone());
         }
 
         let mut best_label: Option<&Label> = None;
@@ -195,11 +180,10 @@ impl Pricer {
 
         match best_label {
             Some(label) => {
-                let best_label = best_label.unwrap();
                 (
-                    self.path_from_label(best_label),
-                    best_label.reduced_cost,
-                    best_label.cost,
+                    self.path_from_label(label, &pred),
+                    label.reduced_cost,
+                    label.cost,
                 )
             }
             None => {
@@ -244,7 +228,6 @@ impl Pricer {
             accumulated_demand,
             next_earliest_time,
             visited,
-            Some(Box::new(label_to_expand.clone())),
         );
 
         *current_label_id += 1;
@@ -267,13 +250,13 @@ impl Pricer {
         less_then_or_eq && one_is_less
     }
 
-    fn _dominance_check(&self, A: &HashSet<&Label>, B: &HashSet<&Label>) -> HashSet<&Label> {
+    fn _dominance_check(&self, A: &HashSet<Label>, B: &HashSet<Label>) -> HashSet<Label> {
         // Which from A are dominated by a label in B
-        let mut result = HashSet::<&Label>::new();
+        let mut result = HashSet::<Label>::new();
         for a in A {
             for b in B {
                 if Self::dominates(b, a) {
-                    result.insert(a);
+                    result.insert(a.clone());
                     break;
                 }
             }
@@ -281,21 +264,22 @@ impl Pricer {
         result
     }
 
-    fn is_dominated(&self, label: &Label, label_set: &HashSet<&Label>) -> bool {
-        let dominated = self._dominance_check(&HashSet::from([label]), label_set);
+    fn is_dominated(&self, label: Label, label_set: &HashSet<Label>) -> bool {
+        let set_for_label = HashSet::from([label]); 
+        let dominated = self._dominance_check(&set_for_label, label_set);
         !dominated.is_empty()
     }
 
-    fn dominated_by(&self, label: &Label, label_set: &HashSet<&Label>) -> HashSet<&Label> {
+    fn dominated_by(&self, label: Label, label_set: &HashSet<Label>) -> HashSet<Label> {
         self._dominance_check(label_set, &HashSet::from([label]))
     }
 
-    fn path_from_label(&self, label: &Label) -> Vec<usize> {
+    fn path_from_label(&self, label: &Label, pred: &HashMap<usize, Label>) -> Vec<usize> {
         let mut path = Vec::<usize>::new();
-        let mut current_label = Some(Box::new(label));
-        while let Some(label) = current_label {
-            path.push(label.last_node);
-            current_label = label.last_label.clone();
+        let mut current_label = label;
+        while let Some(parent) = pred.get(&current_label.id) {
+            path.push(current_label.last_node);
+            current_label = parent;
         }
         path.reverse();
         path
