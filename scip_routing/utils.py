@@ -1,6 +1,9 @@
+from functools import lru_cache
+
 from cvrplib.Instance import VRPTW
 import networkx as nx
 from ast import literal_eval as make_tuple
+
 
 def instance_graph(instance: VRPTW):
     graph = nx.DiGraph()
@@ -32,7 +35,11 @@ def minify_instance(instance, only_first):
 
 
 def var_to_edges(var):
-    var_name = str(var)
+    return var_name_to_edges(str(var))
+
+
+@lru_cache(maxsize=None)
+def var_name_to_edges(var_name):
     var_name = var_name if var_name[0] != "t" else var_name[2:]
     nodes = list(make_tuple(var_name))
     nodes[-1] = nodes[0]
