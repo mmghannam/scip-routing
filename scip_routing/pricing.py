@@ -195,7 +195,7 @@ class Pricer(scip.Pricer):
                 n_added_paths += 1
                 # print(path, redcost)
 
-                var = self.model.addVar(name=f"var-{str(path)}", obj=cost, vtype="B",
+                var = self.model.addVar(name=f"{str(path)}", obj=cost, vtype="B",
                                         pricedVar=True)
                 self.added_paths[str(path)] = var
                 cust_i_in_path = defaultdict(lambda: 0)

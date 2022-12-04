@@ -24,7 +24,7 @@ class VRPTWSolver:
     def init_rmp(self):
         rmp = scip.Model()
         for customer in self.customers:
-            var_name = f"{self.start_depot}-{customer}-{self.end_depot}"
+            var_name = str((self.start_depot, customer, self.end_depot))
             cost = self.pricer.graph[self.start_depot][customer]["distance"] + \
                    self.pricer.graph[customer][self.end_depot]["distance"]
             var = rmp.addVar(obj=cost, name=var_name, vtype="B")
