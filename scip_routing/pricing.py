@@ -36,6 +36,7 @@ class Pricer(scip.Pricer):
         self.earliest = instance.earliest + [instance.earliest[self.start_depot]]
         self.latest = instance.latest + [instance.latest[self.start_depot]]
         self.demands = instance.demands + [instance.demands[self.start_depot]]
+        self.service_times = instance.service_times + [instance.service_times[self.start_depot]]
         self.capacity = instance.capacity
         self.customers = instance.customers
         self.ncustomers = instance.n_customers
@@ -44,9 +45,8 @@ class Pricer(scip.Pricer):
             self.distance_fn = distance_fn
         else:
             self.distance_fn = lambda i, j: self.graph[i][j]['distance']
-        self.time_fn = lambda i, j: self.graph[i][j]['distance']
+        self.time_fn = lambda i, j: self.graph[i][j]['distance'] + self.service_times[i]
         self.added_paths = {}
-        self.elementary = False
 
     def path_from_label(self, label: Label):
         curr = label
@@ -99,7 +99,9 @@ class Pricer(scip.Pricer):
 
         while label_queue:
             label_to_expand = self.choose_label_to_expand(label_queue, removed_labels)
+            if not label_to_expand: break
             next_node_to_expand = label_to_expand.last_node
+
             for neighbor in nx.neighbors(self.graph, next_node_to_expand):
                 if neighbor in label_to_expand.visited: continue
                 if (next_node_to_expand, neighbor) in deleted_edges: continue
@@ -175,11 +177,7 @@ class Pricer(scip.Pricer):
                         label_a.earliest_time <= label_b.earliest_time
         one_is_strictly_less = label_a.cost < label_b.cost or label_a.demand < label_b.demand or \
                                label_a.earliest_time < label_b.earliest_time
-        if self.elementary:
-            visited_less = label_a.visited.issubset(label_b.visited)
-        else:
-            visited_less = True
-        return is_less_or_eq and one_is_strictly_less and visited_less
+        return is_less_or_eq and one_is_strictly_less
 
     def pricerredcost(self, *args, **kwargs):
         duals = {self.start_depot: 0}
@@ -188,38 +186,32 @@ class Pricer(scip.Pricer):
         duals[self.end_depot] = 0
 
         n_added_paths = 0
-        self.elementary = True
-        min_redcost = float("inf")
+        min_redcost = 0
 
-        while True:
-            something_added = False
-            for path, cost, redcost in self.find_path(duals):
-                if redcost < -1e-8 and str(path) not in self.added_paths:
-                    if redcost < min_redcost and self.elementary:
-                        min_redcost = redcost
-                    something_added = True
-                    n_added_paths += 1
-                    # print(path, redcost)
+        for path, cost, redcost in self.find_path(duals):
+            if redcost < -1e-8 and str(path) not in self.added_paths:
+                if redcost < min_redcost:
+                    min_redcost = redcost
+                n_added_paths += 1
+                # print(path, redcost)
 
-                    var = self.model.addVar(name=f"var-{str(path)}", obj=cost, vtype="C",
-                                            pricedVar=True)
-                    self.added_paths[str(path)] = var
-                    cust_i_in_path = defaultdict(lambda: 0)
-                    for x in path:
-                        cust_i_in_path[x] += 1
-                    for i, cons in enumerate(self.init_cons):
-                        if cust_i_in_path[i + 1] > 0:
-                            # print(i + 1, cust_i_in_path[i + 1])
-                            self.model.addConsCoeff(cons, var, cust_i_in_path[i + 1])
-            if not something_added and not self.elementary:
-                print("switched to elementary mode")
-                self.elementary = True
-                self.first_found = False
-            else:
-                break
+                var = self.model.addVar(name=f"var-{str(path)}", obj=cost, vtype="B",
+                                        pricedVar=True)
+                self.added_paths[str(path)] = var
+                cust_i_in_path = defaultdict(lambda: 0)
+                for x in path:
+                    cust_i_in_path[x] += 1
+                for i, cons in enumerate(self.init_cons):
+                    if cust_i_in_path[i + 1] > 0:
+                        # print(i + 1, cust_i_in_path[i + 1])
+                        self.model.addConsCoeff(cons, var, cust_i_in_path[i + 1])
 
         print("LP obj:", self.model.getLPObjVal())
-        return {"result": scip.SCIP_RESULT.SUCCESS}
+        print("lowerbound", self.model.getLPObjVal() + min_redcost)
+        return {
+            "result": scip.SCIP_RESULT.SUCCESS,
+            "lowerbound": self.model.getLPObjVal() + min_redcost
+        }
 
     def pricerinit(self):
         for i, c in enumerate(self.init_cons):
