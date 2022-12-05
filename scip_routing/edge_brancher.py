@@ -12,11 +12,6 @@ class EdgeBrancher(scip.Branchrule):
         self.deleted_edges_from_node = deleted_edges_from_node
         self.graph = graph
 
-    def vet_edge(self, edge: tuple) -> bool:
-        return self.graph.nodes[edge[0]]["location"].type == "vet" or self.graph.nodes[edge[1]][
-            "location"].type == "vet" or edge[1] == len(
-            self.graph.nodes) + 1
-
     def branchexeclp(self, *args, **kwargs):
         branch_vars, sol_vals, _, n_cands, *_ = self.model.getLPBranchCands()
 
@@ -27,7 +22,7 @@ class EdgeBrancher(scip.Branchrule):
             for edge in var_edges:
                 edges[edge] += sol_vals[i]
 
-        fractional_edges = [edge for edge, v in edges.items() if EPSILON < v < 1 - EPSILON and not self.vet_edge(edge)]
+        fractional_edges = [edge for edge, v in edges.items() if EPSILON < v < 1 - EPSILON]
 
         assert (len(fractional_edges) > 0)
 
