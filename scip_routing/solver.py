@@ -7,14 +7,19 @@ import pyscipopt as scip
 
 
 class VRPTWSolver:
-    def __init__(self, graph, instance, verbose=False, distance_fn=None):
+    def __init__(self, graph, instance, verbosity=0, distance_fn=None, pricing_strategy="rust"):
         self.start_depot = instance.depot
         self.end_depot = instance.n_customers + 1
         self.customers = instance.customers
         self.deleted_edges_from_node = defaultdict(lambda: set())
         self.graph = graph
-        self.pricer = Pricer(graph, instance, deleted_edges_from_node=self.deleted_edges_from_node, distance_fn=distance_fn)
-        self.verbose = verbose
+        self.added_paths = {}
+        self.pricer = Pricer(graph, instance, init_added_paths=self.added_paths,
+                             deleted_edges_from_node=self.deleted_edges_from_node,
+                             distance_fn=distance_fn,
+                             strategy=pricing_strategy,
+                             verbosity=verbosity)
+        self.verbosity = verbosity
         self.rmp = self.init_rmp()
         init_cons = list(self.rmp.getConss())
         self.pricer.set_init_cons(init_cons)
@@ -28,9 +33,10 @@ class VRPTWSolver:
             cost = self.pricer.graph[self.start_depot][customer]["distance"] + \
                    self.pricer.graph[customer][self.end_depot]["distance"]
             var = rmp.addVar(obj=cost, name=var_name, vtype="B")
+            self.added_paths[var_name] = var
             rmp.addCons(var == 1, separate=False, modifiable=True)
         rmp.setMinimize()
-        if not self.verbose:
+        if self.verbosity == 0:
             rmp.hideOutput()
         return rmp
 
@@ -45,7 +51,6 @@ class VRPTWSolver:
                                    maxbounddist=1)
         eventhdlr = EdgeBranchingEventhdlr(self.deleted_edges_from_node)
         self.rmp.includeEventhdlr(eventhdlr, "Edge Branching Event Handler", "")
-
 
         self.rmp.optimize()
         # print(self.rmp.getBestSol())
