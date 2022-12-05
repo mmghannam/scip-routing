@@ -4,6 +4,7 @@ from collections import defaultdict
 import networkx as nx
 # from pyscipopt import Model, Pricer, SCIP_RESULT, SCIP_PARAMSETTING, quicksum
 import pyscipopt as scip
+from rs_pricing import Pricer as RustPricer
 
 
 class Label:
@@ -27,9 +28,10 @@ class Pricer(scip.Pricer):
     Solver for the Resource Constrained Shortest Path Problem, implements a basic Labeling Algorithm.
     """
 
-    def __init__(self, graph, instance, deleted_edges_from_node=set(), distance_fn=None):
+    def __init__(self, graph, instance, deleted_edges_from_node=set(), distance_fn=None, strategy="rust"):
         super().__init__()
         self.graph = graph
+        self.instance = instance
         self.deleted_edges_from_node = deleted_edges_from_node
         self.start_depot = instance.depot
         self.end_depot = instance.n_customers + 1
@@ -47,6 +49,41 @@ class Pricer(scip.Pricer):
             self.distance_fn = lambda i, j: self.graph[i][j]['distance']
         self.time_fn = lambda i, j: self.graph[i][j]['distance'] + self.service_times[i]
         self.added_paths = {}
+
+        assert strategy in ["rust", "py"]
+        self.strategy = strategy
+        if strategy == "rust":
+            self.rust_pricer = self.init_rust_pricer()
+
+    def init_rust_pricer(self) -> RustPricer:
+        # demands: Vec < usize >,
+        # time_windows: Vec < (usize, usize) >,
+        # service_times: Vec < usize >,
+        # vehicle_capacity: usize,
+        # customers: Vec < usize >,
+        # start_depot: usize,
+        # end_depot: usize,
+        # drive_time: Vec < Vec < usize >>,
+        # neighbors: HashMap < usize, Vec < usize >>,
+        drive_times = self.instance.distances
+        for drive_time_list in drive_times:
+            drive_time_list.append(drive_time_list[0])
+
+        neighbors = {n: list(self.graph.neighbors(n)) for n in self.customers}
+        neighbors[self.start_depot] = self.customers
+        neighbors[self.end_depot] = []
+
+        return RustPricer(
+            demands=self.demands,
+            time_windows=[(a, b) for a, b in zip(self.earliest, self.latest)],
+            service_times=self.service_times,
+            vehicle_capacity=self.capacity,
+            customers=self.customers,
+            start_depot=self.start_depot,
+            end_depot=self.end_depot,
+            drive_time=drive_times,
+            neighbors=neighbors
+        )
 
     def path_from_label(self, label: Label):
         curr = label
@@ -83,11 +120,20 @@ class Pricer(scip.Pricer):
                            names=["-".join(map(str, path))],
                            types=['C'])
 
+    def find_path_rust(self, duals, deleted_edges):
+        return self.rust_pricer.find_path(duals, deleted_edges)
+
     def find_path(self, duals):
+        deleted_edges = self.deleted_edges_from_node[self.model.getCurrentNode().getNumber()]
+        if self.strategy == "py":
+            return self.find_path_py(duals, deleted_edges)
+        elif self.strategy == "rust":
+            return self.find_path_rust(duals, deleted_edges)
+
+    def find_path_py(self, duals, deleted_edges):
         unprocessed = {}
         processed = {}
 
-        deleted_edges = self.deleted_edges_from_node[self.model.getCurrentNode().getNumber()]
         for i in range(self.ncustomers + 2):  # customers + end depot
             unprocessed[i] = set()
             processed[i] = set()
@@ -189,11 +235,11 @@ class Pricer(scip.Pricer):
         min_redcost = 0
 
         for path, cost, redcost in self.find_path(duals):
-            if redcost < -1e-8 and str(path) not in self.added_paths:
+            if str(path) not in self.added_paths:
                 if redcost < min_redcost:
                     min_redcost = redcost
                 n_added_paths += 1
-                # print(path, redcost)
+                print(path, redcost)
 
                 var = self.model.addVar(name=f"{str(path)}", obj=cost, vtype="B",
                                         pricedVar=True)
@@ -207,10 +253,10 @@ class Pricer(scip.Pricer):
                         self.model.addConsCoeff(cons, var, cust_i_in_path[i + 1])
 
         print("LP obj:", self.model.getLPObjVal())
-        print("lowerbound", self.model.getLPObjVal() + min_redcost)
+        # print("lowerbound", self.model.getLPObjVal() + min_redcost)
         return {
             "result": scip.SCIP_RESULT.SUCCESS,
-            "lowerbound": self.model.getLPObjVal() + min_redcost
+            # "lowerbound": self.model.getLPObjVal() + min_redcost
         }
 
     def pricerinit(self):

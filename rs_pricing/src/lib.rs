@@ -56,6 +56,7 @@ impl Hash for Label {
 }
 
 #[pyclass]
+#[derive(Debug)]
 struct Pricer {
     demands: Vec<usize>,
     time_windows: Vec<(usize, usize)>,
@@ -100,7 +101,7 @@ impl Pricer {
         &self,
         duals: HashMap<usize, f64>,
         deleted_edges: HashSet<(usize, usize)>,
-    ) -> (Vec<usize>, f64, f64) {
+    ) -> Vec<(Vec<usize>, f64, f64)> {
         let mut processed = HashMap::<usize, HashSet<Rc<Label>>>::new();
         let mut unprocessed = HashMap::<usize, HashSet<Rc<Label>>>::new();
 
@@ -110,6 +111,11 @@ impl Pricer {
             unprocessed.insert(*customer, HashSet::new());
             processed.insert(*customer, HashSet::new());
         }
+
+        unprocessed.insert(self.start_depot, HashSet::new());
+        unprocessed.insert(self.end_depot, HashSet::new());
+        processed.insert(self.start_depot, HashSet::new());
+        processed.insert(self.end_depot, HashSet::new());
 
         let mut current_label_id = 1;
 
@@ -128,15 +134,16 @@ impl Pricer {
         let mut label_queue = Vec::<Rc<Label>>::new();
 
         label_queue.push(start_label.clone());
-        
-        unprocessed
-            .get_mut(&self.start_depot)
-            .unwrap()
-            .insert(start_label.clone());
 
-            while let Some(label_to_expand) = label_queue.pop() {
+        unprocessed.insert(self.start_depot, HashSet::from([start_label.clone()]));
+
+        while let Some(label_to_expand) = label_queue.pop() {
             let next_node_to_expand = label_to_expand.last_node as usize;
-            let neighbors = self.neighbors.get(&next_node_to_expand).unwrap();
+            let neighbors = match self.neighbors.get(&next_node_to_expand) {
+                Some(n) => n,
+                None => continue,
+            };
+
             for neighbor in neighbors {
                 if label_to_expand.visited.contains(neighbor) {
                     continue;
@@ -145,9 +152,13 @@ impl Pricer {
                     continue;
                 }
 
-                let new_label =
-                    Rc::new(self.expand_label(&label_to_expand, *neighbor, &duals, &mut current_label_id));
-                
+                let new_label = Rc::new(self.expand_label(
+                    &label_to_expand,
+                    *neighbor,
+                    &duals,
+                    &mut current_label_id,
+                ));
+
                 if self.is_feasible(&new_label) {
                     let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
                     if !self.is_dominated(new_label.clone(), label_set_at_node) {
@@ -167,29 +178,25 @@ impl Pricer {
                 .insert(label_to_expand.clone());
         }
 
-        let mut best_label: Option<&Label> = None;
-        let mut best_cost = f64::INFINITY;
-        let labels_at_end_depot = processed.get(&self.end_depot).unwrap();
-        for label in labels_at_end_depot {
-            let cost = label.reduced_cost;
-            if cost < best_cost {
-                best_cost = cost;
-                best_label = Some(label);
-            }
-        }
+        let empty_set = HashSet::new();
+        let mut redcost_labels = vec![] as Vec<(Vec<usize>, f64, f64)>;
+        let labels_at_end_depot = match processed.get(&self.end_depot) {
+            Some(l) => Box::new(l),
+            None => Box::new(&empty_set),
+        };
 
-        match best_label {
-            Some(label) => {
-                (
-                    self.path_from_label(label, &pred),
-                    label.reduced_cost,
+        for label in labels_at_end_depot.into_iter() {
+            let cost = label.reduced_cost;
+            if cost < 1e-6 {
+                redcost_labels.push((
+                    self.path_from_label(&label, &pred),
                     label.cost,
-                )
-            }
-            None => {
-                panic!("No feasible path found");
+                    label.reduced_cost,
+                ));
             }
         }
+        redcost_labels.sort_by(|a,b| a.2.partial_cmp(&b.2).unwrap());
+        redcost_labels
     }
 }
 
@@ -208,12 +215,12 @@ impl Pricer {
         let next_earliest_time = max(
             label_to_expand.earliest_time
                 + self.service_times[label_to_expand.last_node]
-                + distance,
+                + distance, 
             self.time_windows[neighbor].0,
         );
 
         let cost = label_to_expand.cost + distance as f64;
-        let reduced_cost = label_to_expand.reduced_cost + distance as f64 - duals[&last_node];
+        let reduced_cost = label_to_expand.reduced_cost + (distance as f64 - duals[&last_node]);
 
         let accumulated_demand = label_to_expand.demand + self.demands[neighbor] as f64;
 
@@ -250,7 +257,11 @@ impl Pricer {
         less_then_or_eq && one_is_less
     }
 
-    fn _dominance_check(&self, a: &HashSet<Rc<Label>>, b: &HashSet<Rc<Label>>) -> HashSet<Rc<Label>> {
+    fn _dominance_check(
+        &self,
+        a: &HashSet<Rc<Label>>,
+        b: &HashSet<Rc<Label>>,
+    ) -> HashSet<Rc<Label>> {
         // Which from A are dominated by a label in B
         let mut result = HashSet::<Rc<Label>>::new();
         for la in a {
@@ -265,7 +276,7 @@ impl Pricer {
     }
 
     fn is_dominated(&self, label: Rc<Label>, label_set: &HashSet<Rc<Label>>) -> bool {
-        let set_for_label = HashSet::from([Rc::clone(&label)]); 
+        let set_for_label = HashSet::from([Rc::clone(&label)]);
         let dominated = self._dominance_check(&set_for_label, label_set);
         !dominated.is_empty()
     }
@@ -281,6 +292,7 @@ impl Pricer {
             path.push(current_label.last_node);
             current_label = parent;
         }
+        path.push(self.start_depot);
         path.reverse();
         path
     }
