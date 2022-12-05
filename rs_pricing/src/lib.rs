@@ -1,4 +1,4 @@
-use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash};
+use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash, rc::Rc};
 
 use pyo3::prelude::*;
 
@@ -101,10 +101,10 @@ impl Pricer {
         duals: HashMap<usize, f64>,
         deleted_edges: HashSet<(usize, usize)>,
     ) -> (Vec<usize>, f64, f64) {
-        let mut processed = HashMap::<usize, HashSet<Label>>::new();
-        let mut unprocessed = HashMap::<usize, HashSet<Label>>::new();
+        let mut processed = HashMap::<usize, HashSet<Rc<Label>>>::new();
+        let mut unprocessed = HashMap::<usize, HashSet<Rc<Label>>>::new();
 
-        let mut pred = HashMap::<usize, Label>::new();
+        let mut pred = HashMap::<usize, Rc<Label>>::new();
 
         for customer in self.customers.iter() {
             unprocessed.insert(*customer, HashSet::new());
@@ -113,7 +113,7 @@ impl Pricer {
 
         let mut current_label_id = 1;
 
-        let start_label = Label::new(
+        let start_label = Rc::new(Label::new(
             current_label_id,
             self.start_depot,
             0.0,
@@ -121,11 +121,11 @@ impl Pricer {
             0.0,
             self.time_windows[self.start_depot].0,
             HashSet::new(),
-        );
+        ));
 
         current_label_id += 1;
 
-        let mut label_queue = Vec::<Label>::new();
+        let mut label_queue = Vec::<Rc<Label>>::new();
 
         label_queue.push(start_label.clone());
         
@@ -146,8 +146,8 @@ impl Pricer {
                 }
 
                 let new_label =
-                    self.expand_label(&label_to_expand, *neighbor, &duals, &mut current_label_id);
-
+                    Rc::new(self.expand_label(&label_to_expand, *neighbor, &duals, &mut current_label_id));
+                
                 if self.is_feasible(&new_label) {
                     let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
                     if !self.is_dominated(new_label.clone(), label_set_at_node) {
@@ -250,9 +250,9 @@ impl Pricer {
         less_then_or_eq && one_is_less
     }
 
-    fn _dominance_check(&self, A: &HashSet<Label>, B: &HashSet<Label>) -> HashSet<Label> {
+    fn _dominance_check(&self, A: &HashSet<Rc<Label>>, B: &HashSet<Rc<Label>>) -> HashSet<Rc<Label>> {
         // Which from A are dominated by a label in B
-        let mut result = HashSet::<Label>::new();
+        let mut result = HashSet::<Rc<Label>>::new();
         for a in A {
             for b in B {
                 if Self::dominates(b, a) {
@@ -264,17 +264,17 @@ impl Pricer {
         result
     }
 
-    fn is_dominated(&self, label: Label, label_set: &HashSet<Label>) -> bool {
-        let set_for_label = HashSet::from([label]); 
+    fn is_dominated(&self, label: Rc<Label>, label_set: &HashSet<Rc<Label>>) -> bool {
+        let set_for_label = HashSet::from([Rc::clone(&label)]); 
         let dominated = self._dominance_check(&set_for_label, label_set);
         !dominated.is_empty()
     }
 
-    fn dominated_by(&self, label: Label, label_set: &HashSet<Label>) -> HashSet<Label> {
-        self._dominance_check(label_set, &HashSet::from([label]))
+    fn dominated_by(&self, label: Rc<Label>, label_set: &HashSet<Rc<Label>>) -> HashSet<Rc<Label>> {
+        self._dominance_check(label_set, &HashSet::from([Rc::clone(&label)]))
     }
 
-    fn path_from_label(&self, label: &Label, pred: &HashMap<usize, Label>) -> Vec<usize> {
+    fn path_from_label(&self, label: &Label, pred: &HashMap<usize, Rc<Label>>) -> Vec<usize> {
         let mut path = Vec::<usize>::new();
         let mut current_label = label;
         while let Some(parent) = pred.get(&current_label.id) {
