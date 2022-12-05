@@ -250,13 +250,13 @@ impl Pricer {
         less_then_or_eq && one_is_less
     }
 
-    fn _dominance_check(&self, A: &HashSet<Rc<Label>>, B: &HashSet<Rc<Label>>) -> HashSet<Rc<Label>> {
+    fn _dominance_check(&self, a: &HashSet<Rc<Label>>, b: &HashSet<Rc<Label>>) -> HashSet<Rc<Label>> {
         // Which from A are dominated by a label in B
         let mut result = HashSet::<Rc<Label>>::new();
-        for a in A {
-            for b in B {
-                if Self::dominates(b, a) {
-                    result.insert(a.clone());
+        for la in a {
+            for lb in b {
+                if Self::dominates(lb, la) {
+                    result.insert(la.clone());
                     break;
                 }
             }
