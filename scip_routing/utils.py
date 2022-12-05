@@ -30,6 +30,9 @@ def minify_instance(instance, only_first):
     instance.earliest = instance.earliest[:only_first + 1]
     instance.latest = instance.latest[:only_first + 1]
     instance.demands = instance.demands[:only_first + 1]
+    instance.distances = instance.distances[:only_first + 1]
+    for i in range(only_first + 1):
+        instance.distances[i] = instance.distances[i][:only_first + 1]
     instance.n_customers = only_first
     return instance
 

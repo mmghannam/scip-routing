@@ -101,7 +101,7 @@ impl Pricer {
         &self,
         duals: HashMap<usize, f64>,
         deleted_edges: HashSet<(usize, usize)>,
-    ) -> Vec<(Vec<usize>, f64, f64)> {
+    ) -> Vec<(Vec<usize>, Vec<usize>, f64, f64)> {
         let mut processed = HashMap::<usize, HashSet<Rc<Label>>>::new();
         let mut unprocessed = HashMap::<usize, HashSet<Rc<Label>>>::new();
 
@@ -179,7 +179,7 @@ impl Pricer {
         }
 
         let empty_set = HashSet::new();
-        let mut redcost_labels = vec![] as Vec<(Vec<usize>, f64, f64)>;
+        let mut redcost_labels = vec![] as Vec<(Vec<usize>, Vec<usize>, f64, f64)>;
         let labels_at_end_depot = match processed.get(&self.end_depot) {
             Some(l) => Box::new(l),
             None => Box::new(&empty_set),
@@ -188,14 +188,11 @@ impl Pricer {
         for label in labels_at_end_depot.into_iter() {
             let cost = label.reduced_cost;
             if cost < 1e-6 {
-                redcost_labels.push((
-                    self.path_from_label(&label, &pred),
-                    label.cost,
-                    label.reduced_cost,
-                ));
+                let (path, start_times) = self.path_from_label(&label, &pred);
+                redcost_labels.push((path, start_times, label.cost, label.reduced_cost));
             }
         }
-        redcost_labels.sort_by(|a,b| a.2.partial_cmp(&b.2).unwrap());
+        redcost_labels.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
         redcost_labels
     }
 }
@@ -215,7 +212,7 @@ impl Pricer {
         let next_earliest_time = max(
             label_to_expand.earliest_time
                 + self.service_times[label_to_expand.last_node]
-                + distance, 
+                + distance,
             self.time_windows[neighbor].0,
         );
 
@@ -285,15 +282,23 @@ impl Pricer {
         self._dominance_check(label_set, &HashSet::from([Rc::clone(&label)]))
     }
 
-    fn path_from_label(&self, label: &Label, pred: &HashMap<usize, Rc<Label>>) -> Vec<usize> {
+    fn path_from_label(
+        &self,
+        label: &Label,
+        pred: &HashMap<usize, Rc<Label>>,
+    ) -> (Vec<usize>, Vec<usize>) {
         let mut path = Vec::<usize>::new();
+        let mut start_times = Vec::<usize>::new();
         let mut current_label = label;
         while let Some(parent) = pred.get(&current_label.id) {
             path.push(current_label.last_node);
+            start_times.push(current_label.earliest_time);
             current_label = parent;
         }
-        path.push(self.start_depot);
+        path.push(current_label.last_node);
+        start_times.push(current_label.earliest_time);
         path.reverse();
-        path
+        start_times.reverse();
+        (path, start_times)
     }
 }

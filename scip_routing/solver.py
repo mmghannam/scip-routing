@@ -13,7 +13,10 @@ class VRPTWSolver:
         self.customers = instance.customers
         self.deleted_edges_from_node = defaultdict(lambda: set())
         self.graph = graph
-        self.pricer = Pricer(graph, instance, deleted_edges_from_node=self.deleted_edges_from_node, distance_fn=distance_fn)
+        self.added_paths = {}
+        self.pricer = Pricer(graph, instance, init_added_paths=self.added_paths,
+                             deleted_edges_from_node=self.deleted_edges_from_node,
+                             distance_fn=distance_fn)
         self.verbose = verbose
         self.rmp = self.init_rmp()
         init_cons = list(self.rmp.getConss())
@@ -28,6 +31,7 @@ class VRPTWSolver:
             cost = self.pricer.graph[self.start_depot][customer]["distance"] + \
                    self.pricer.graph[customer][self.end_depot]["distance"]
             var = rmp.addVar(obj=cost, name=var_name, vtype="B")
+            self.added_paths[var_name] = var
             rmp.addCons(var == 1, separate=False, modifiable=True)
         rmp.setMinimize()
         if not self.verbose:
@@ -45,7 +49,6 @@ class VRPTWSolver:
                                    maxbounddist=1)
         eventhdlr = EdgeBranchingEventhdlr(self.deleted_edges_from_node)
         self.rmp.includeEventhdlr(eventhdlr, "Edge Branching Event Handler", "")
-
 
         self.rmp.optimize()
         # print(self.rmp.getBestSol())

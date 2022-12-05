@@ -28,7 +28,8 @@ class Pricer(scip.Pricer):
     Solver for the Resource Constrained Shortest Path Problem, implements a basic Labeling Algorithm.
     """
 
-    def __init__(self, graph, instance, deleted_edges_from_node=set(), distance_fn=None, strategy="rust"):
+    def __init__(self, graph, instance, init_added_paths={}, deleted_edges_from_node=set(), distance_fn=None,
+                 strategy="py"):
         super().__init__()
         self.graph = graph
         self.instance = instance
@@ -48,7 +49,7 @@ class Pricer(scip.Pricer):
         else:
             self.distance_fn = lambda i, j: self.graph[i][j]['distance']
         self.time_fn = lambda i, j: self.graph[i][j]['distance'] + self.service_times[i]
-        self.added_paths = {}
+        self.added_paths = init_added_paths
 
         assert strategy in ["rust", "py"]
         self.strategy = strategy
@@ -56,15 +57,6 @@ class Pricer(scip.Pricer):
             self.rust_pricer = self.init_rust_pricer()
 
     def init_rust_pricer(self) -> RustPricer:
-        # demands: Vec < usize >,
-        # time_windows: Vec < (usize, usize) >,
-        # service_times: Vec < usize >,
-        # vehicle_capacity: usize,
-        # customers: Vec < usize >,
-        # start_depot: usize,
-        # end_depot: usize,
-        # drive_time: Vec < Vec < usize >>,
-        # neighbors: HashMap < usize, Vec < usize >>,
         drive_times = self.instance.distances
         for drive_time_list in drive_times:
             drive_time_list.append(drive_time_list[0])
@@ -73,9 +65,11 @@ class Pricer(scip.Pricer):
         neighbors[self.start_depot] = self.customers
         neighbors[self.end_depot] = []
 
+        time_windows = [(a, b) for a, b in zip(self.earliest, self.latest)]
+
         return RustPricer(
             demands=self.demands,
-            time_windows=[(a, b) for a, b in zip(self.earliest, self.latest)],
+            time_windows=time_windows ,
             service_times=self.service_times,
             vehicle_capacity=self.capacity,
             customers=self.customers,
@@ -88,13 +82,15 @@ class Pricer(scip.Pricer):
     def path_from_label(self, label: Label):
         curr = label
         path = []
+        start_times = []
         cost = 0
         while curr is not None:
             path.insert(0, curr.last_node)
+            start_times.insert(0, curr.earliest_time)
             if curr.last_label:
                 cost += self.distance_fn(curr.last_label.last_node, curr.last_node)
             curr = curr.last_label
-        return tuple(path), cost
+        return tuple(path), start_times, cost
 
     def add_path_to_rmp(self, path, cost, solver):
         customer_counts = {}
@@ -126,7 +122,9 @@ class Pricer(scip.Pricer):
     def find_path(self, duals):
         deleted_edges = self.deleted_edges_from_node[self.model.getCurrentNode().getNumber()]
         if self.strategy == "py":
-            return self.find_path_py(duals, deleted_edges)
+            result = list(self.find_path_py(duals, deleted_edges))
+            result.sort(key=lambda element: element[3])
+            return result
         elif self.strategy == "rust":
             return self.find_path_rust(duals, deleted_edges)
 
@@ -162,22 +160,23 @@ class Pricer(scip.Pricer):
                     if len(dominated) == 0:
                         heapq.heappush(label_queue,
                                        (new_label.earliest_time, new_label.cost, new_label))
-                        dominated = self.dominance_check(unprocessed[neighbor], {new_label})
-                        removed_labels |= dominated
-                        unprocessed[neighbor] = (unprocessed[neighbor] - dominated) | {new_label}
+                        if neighbor != self.end_depot:
+                            dominated = self.dominance_check(unprocessed[neighbor], {new_label})
+                            removed_labels |= dominated
+                            unprocessed[neighbor] = (unprocessed[neighbor] - dominated) | {new_label}
             processed[next_node_to_expand].add(label_to_expand)
 
         best_path_label = None
         best_path_redcost = float("inf")
         if processed[self.end_depot]:
             for label in processed[self.end_depot]:
-                if label.cost < -1e-08:
+                if label.cost < 1e-6:
                     yield *self.path_from_label(label), label.cost
                 if label.cost < best_path_redcost:
                     best_path_label = label
                     best_path_redcost = label.cost
-        best_path, best_path_travel_cost = self.path_from_label(best_path_label)
-        yield best_path, best_path_travel_cost, best_path_redcost
+        best_path, start_times, best_path_travel_cost = self.path_from_label(best_path_label)
+        yield best_path, start_times, best_path_travel_cost, best_path_redcost
 
     def choose_label_to_expand(self, label_heap, removed_labels):
         while label_heap:
@@ -197,7 +196,7 @@ class Pricer(scip.Pricer):
         last_visited = neighbor
         demand = label_to_expand.demand + self.demands[neighbor]
         earliest_time = max(label_to_expand.earliest_time + self.time_fn(next_node_to_expand, neighbor),
-                            self.latest[neighbor])
+                            self.earliest[neighbor])
         visited = set(label_to_expand.visited)
         visited.add(neighbor)
         return demand, last_visited, redcost, earliest_time, visited
@@ -234,16 +233,17 @@ class Pricer(scip.Pricer):
         n_added_paths = 0
         min_redcost = 0
 
-        for path, cost, redcost in self.find_path(duals):
-            if str(path) not in self.added_paths:
+        for path, start_times, cost, redcost in self.find_path(duals):
+            path_name =str((*path,))
+            if path_name not in self.added_paths:
                 if redcost < min_redcost:
                     min_redcost = redcost
                 n_added_paths += 1
-                print(path, redcost)
+                # print(path, start_times, cost, redcost)
 
                 var = self.model.addVar(name=f"{str(path)}", obj=cost, vtype="B",
                                         pricedVar=True)
-                self.added_paths[str(path)] = var
+                self.added_paths[path_name] = var
                 cust_i_in_path = defaultdict(lambda: 0)
                 for x in path:
                     cust_i_in_path[x] += 1
