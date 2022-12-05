@@ -7,7 +7,7 @@ import pyscipopt as scip
 
 
 class VRPTWSolver:
-    def __init__(self, graph, instance, verbose=False, distance_fn=None):
+    def __init__(self, graph, instance, verbosity=0, distance_fn=None, pricing_strategy="rust"):
         self.start_depot = instance.depot
         self.end_depot = instance.n_customers + 1
         self.customers = instance.customers
@@ -16,8 +16,10 @@ class VRPTWSolver:
         self.added_paths = {}
         self.pricer = Pricer(graph, instance, init_added_paths=self.added_paths,
                              deleted_edges_from_node=self.deleted_edges_from_node,
-                             distance_fn=distance_fn)
-        self.verbose = verbose
+                             distance_fn=distance_fn,
+                             strategy=pricing_strategy,
+                             verbosity=verbosity)
+        self.verbosity = verbosity
         self.rmp = self.init_rmp()
         init_cons = list(self.rmp.getConss())
         self.pricer.set_init_cons(init_cons)
@@ -34,7 +36,7 @@ class VRPTWSolver:
             self.added_paths[var_name] = var
             rmp.addCons(var == 1, separate=False, modifiable=True)
         rmp.setMinimize()
-        if not self.verbose:
+        if self.verbosity == 0:
             rmp.hideOutput()
         return rmp
 
