@@ -52,5 +52,13 @@ class VRPTWSolver:
         eventhdlr = EdgeBranchingEventhdlr(self.deleted_edges_from_node)
         self.rmp.includeEventhdlr(eventhdlr, "Edge Branching Event Handler", "")
 
+        self.rmp.setParam("display/freq", 1)
+        self.rmp.setParam("display/headerfreq", 1)
+        self.rmp.setObjIntegral()
         self.rmp.optimize()
-        # print(self.rmp.getBestSol())
+        solution = self.rmp.getBestSol()
+        print("Best solution found:")
+        for var in self.rmp.getVars(transformed=True):
+            solval = solution[var]
+            if solval > 1e-6:
+                print(var, var.getObj(), solval)
