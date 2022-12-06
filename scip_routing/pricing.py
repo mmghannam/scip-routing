@@ -240,7 +240,7 @@ class Pricer(scip.Pricer):
                 if redcost < min_redcost:
                     min_redcost = redcost
                 n_added_paths += 1
-                if self.verbosity >= 2:
+                if self.verbosity >= 3:
                     print(path, start_times, cost, redcost)
 
                 var = self.model.addVar(name=f"{str(path)}", obj=cost, vtype="B",
@@ -253,12 +253,12 @@ class Pricer(scip.Pricer):
                     if cust_i_in_path[i + 1] > 0:
                         # print(i + 1, cust_i_in_path[i + 1])
                         self.model.addConsCoeff(cons, var, cust_i_in_path[i + 1])
-        if self.verbosity >= 1:
-            print("LP obj:", self.model.getLPObjVal())
+        if self.verbosity >= 2:
+            print(f"at{self.model.getCurrentNode().getNumber()}, LP obj:", self.model.getLPObjVal())
             # print("lowerbound", self.model.getLPObjVal() + min_redcost)
         return {
             "result": scip.SCIP_RESULT.SUCCESS,
-            # "lowerbound": self.model.getLPObjVal() + min_redcost
+            "lowerbound": self.model.getLPObjVal() + min_redcost
         }
 
     def pricerinit(self):
