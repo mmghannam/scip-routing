@@ -124,7 +124,7 @@ class Pricer(scip.Pricer):
         deleted_edges = self.deleted_edges_from_node[self.model.getCurrentNode().getNumber()]
         if self.strategy == "py":
             result = list(self.find_path_py(duals, deleted_edges))
-            result.sort(key=lambda element: element[3])
+            result.sort(key=lambda element: str(element[0]))
             return result
         elif self.strategy == "rust":
             return self.find_path_rust(duals, deleted_edges)

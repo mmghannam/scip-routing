@@ -192,7 +192,7 @@ impl Pricer {
                 redcost_labels.push((path, start_times, label.cost, label.reduced_cost));
             }
         }
-        redcost_labels.sort_by(|a, b| a.3.partial_cmp(&b.3).unwrap());
+        redcost_labels.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         redcost_labels
     }
 }
