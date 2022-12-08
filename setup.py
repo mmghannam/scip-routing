@@ -6,8 +6,8 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="scip_routing",
-    version="0.2.2",
-    description="A basic VRPTW Branch-and-Price solver",
+    version="0.3.0",
+    description="An basic VRPTW Branch-and-Price solver",
     long_description=readme_text,
     long_description_content_type="text/markdown",
     author="Mohammed Ghannam",
@@ -18,5 +18,6 @@ setup(
     install_requires=[
         "pyscipopt",
         "networkx",
+        "maturin",
     ],
 )
