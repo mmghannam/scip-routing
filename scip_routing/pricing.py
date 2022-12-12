@@ -225,7 +225,7 @@ class Pricer(scip.Pricer):
                         label_a.earliest_time <= label_b.earliest_time
         one_is_strictly_less = label_a.cost < label_b.cost or label_a.demand < label_b.demand or \
                                label_a.earliest_time < label_b.earliest_time
-        subset = self.elementary and label_a.visited.issubset(label_b.visited)
+        subset = not self.elementary or label_a.visited.issubset(label_b.visited)
         return is_less_or_eq and one_is_strictly_less and subset
 
     def pricerredcost(self, *args, **kwargs):
