@@ -67,6 +67,7 @@ struct Pricer {
     end_depot: usize,
     drive_time: Vec<Vec<usize>>,
     neighbors: HashMap<usize, Vec<usize>>,
+    elementary: bool,
 }
 
 // methods for Pricer to export to python
@@ -94,8 +95,18 @@ impl Pricer {
             end_depot,
             drive_time,
             neighbors,
+            elementary: false,
         }
     }
+
+     fn get_elementary(&self) -> PyResult<bool> {
+        Ok(self.elementary)
+     }
+
+     fn set_elementary(&mut self, value: bool) -> PyResult<()> {
+        self.elementary = value;
+        Ok(())
+     }
 
     fn find_path(
         &self,
@@ -244,14 +255,20 @@ impl Pricer {
             && label.demand <= self.vehicle_capacity as f64
     }
 
-    fn dominates(la: &Label, lb: &Label) -> bool {
+    fn dominates(&self, la: &Label, lb: &Label) -> bool {
         let less_then_or_eq = la.earliest_time <= lb.earliest_time
             && la.reduced_cost <= lb.reduced_cost
             && la.demand <= lb.demand;
         let one_is_less = la.earliest_time < lb.earliest_time
             || la.reduced_cost < lb.reduced_cost
             || la.demand < lb.demand;
-        less_then_or_eq && one_is_less
+        let dominates_non_elementary = less_then_or_eq && one_is_less;
+        if self.elementary {
+            dominates_non_elementary && la.visited.is_subset(&lb
+                .visited)
+        } else {
+            dominates_non_elementary
+        }
     }
 
     fn _dominance_check(
@@ -263,7 +280,7 @@ impl Pricer {
         let mut result = HashSet::<Rc<Label>>::new();
         for la in a {
             for lb in b {
-                if Self::dominates(lb, la) {
+                if self.dominates(lb, la) {
                     result.insert(la.clone());
                     break;
                 }
