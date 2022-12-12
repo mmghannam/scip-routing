@@ -1,5 +1,5 @@
 use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash, rc::Rc};
-
+use bit_set::BitSet;
 use pyo3::prelude::*;
 
 #[pymodule]
@@ -16,7 +16,7 @@ struct Label {
     reduced_cost: f64,
     demand: f64,
     earliest_time: usize,
-    visited: HashSet<usize>,
+    visited: BitSet,
 }
 
 impl Label {
@@ -27,7 +27,7 @@ impl Label {
         reduced_cost: f64,
         demand: f64,
         earliest_time: usize,
-        visited: HashSet<usize>,
+        visited: BitSet,
     ) -> Self {
         Self {
             id,
@@ -137,7 +137,7 @@ impl Pricer {
             0.0,
             0.0,
             self.time_windows[self.start_depot].0,
-            HashSet::new(),
+            BitSet::with_capacity(self.customers.len() + 2),
         ));
 
         current_label_id += 1;
@@ -156,7 +156,7 @@ impl Pricer {
             };
 
             for neighbor in neighbors {
-                if label_to_expand.visited.contains(neighbor) {
+                if label_to_expand.visited.contains(*neighbor) {
                     continue;
                 }
                 if deleted_edges.contains(&(label_to_expand.last_node, *neighbor)) {
