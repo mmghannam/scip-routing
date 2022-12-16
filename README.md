@@ -20,11 +20,9 @@ maturin develop --release
 import cvrplib
 
 from scip_routing.solver import VRPTWSolver
-from scip_routing.utils import instance_graph, minify_instance
+from scip_routing.utils import instance_graph
 
 instance, sol = cvrplib.download('R101', solution=True)
-
-instance = minify_instance(instance, 100)
 
 instance_graph = instance_graph(instance)
 
