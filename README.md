@@ -26,10 +26,11 @@ instance, sol = cvrplib.download('R101', solution=True)
 
 instance_graph = instance_graph(instance)
 
-solver = VRPTWSolver(graph=instance_graph,
-                     instance=instance,
-                     verbosity=2,
-                     pricing_strategy="rust", # "py" also can be used for the pure-python pricer
-                     )
+solver = VRPTWSolver(
+        graph=instance_graph,
+        instance=instance,
+        verbosity=2,
+        pricing_strategy="rust", # "py" also can be used for the pure-python pricer
+    )
 solver.solve()
 ```
