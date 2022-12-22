@@ -184,12 +184,13 @@ impl Pricer {
 
                 if self.is_feasible(&new_label) {
                     let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
-                    if !self.is_dominated(new_label.clone(), label_set_at_node) {
+                    let label_set_at_node_processed = processed.get_mut(neighbor).unwrap();
+                    if !self.is_dominated(new_label.clone(), &label_set_at_node) && !self.is_dominated(new_label.clone(), &label_set_at_node_processed) {
                         label_queue.push(new_label.clone());
                         pred.insert(new_label.id, label_to_expand.clone());
                         if neighbor != &self.end_depot {
                             let dominated =
-                                self.dominated_by(new_label.clone(), label_set_at_node);
+                                self.dominated_by(new_label.clone(), &label_set_at_node);
                             for label in dominated {
                                 label_set_at_node.remove(&label);
                                 pred.remove(&label.id);
