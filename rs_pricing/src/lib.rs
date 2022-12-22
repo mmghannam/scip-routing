@@ -1,6 +1,6 @@
 use bit_set::BitSet;
 use pyo3::prelude::*;
-use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash, rc::Rc};
+use std::{cmp::max, collections::HashMap, collections::BTreeSet, hash::Hash, rc::Rc};
 
 #[pymodule]
 fn rs_pricing(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -52,6 +52,18 @@ impl Eq for Label {}
 impl Hash for Label {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+    }
+}
+
+impl PartialOrd for Label {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Label {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.partial_cmp(&other.id).unwrap()
     }
 }
 
@@ -111,22 +123,22 @@ impl Pricer {
     fn find_path(
         &self,
         duals: HashMap<usize, f64>,
-        deleted_edges: HashSet<(usize, usize)>,
+        deleted_edges: BTreeSet<(usize, usize)>,
     ) -> Vec<(Vec<usize>, Vec<usize>, f64, f64)> {
-        let mut processed = HashMap::<usize, HashSet<Rc<Label>>>::new();
-        let mut unprocessed = HashMap::<usize, HashSet<Rc<Label>>>::new();
+        let mut processed = HashMap::<usize, BTreeSet<Rc<Label>>>::new();
+        let mut unprocessed = HashMap::<usize, BTreeSet<Rc<Label>>>::new();
 
         let mut pred = HashMap::<usize, Rc<Label>>::new();
 
         for customer in self.customers.iter() {
-            unprocessed.insert(*customer, HashSet::new());
-            processed.insert(*customer, HashSet::new());
+            unprocessed.insert(*customer, BTreeSet::new());
+            processed.insert(*customer, BTreeSet::new());
         }
 
-        unprocessed.insert(self.start_depot, HashSet::new());
-        unprocessed.insert(self.end_depot, HashSet::new());
-        processed.insert(self.start_depot, HashSet::new());
-        processed.insert(self.end_depot, HashSet::new());
+        unprocessed.insert(self.start_depot, BTreeSet::new());
+        unprocessed.insert(self.end_depot, BTreeSet::new());
+        processed.insert(self.start_depot, BTreeSet::new());
+        processed.insert(self.end_depot, BTreeSet::new());
 
         let mut current_label_id = 1;
 
@@ -146,7 +158,7 @@ impl Pricer {
 
         label_queue.push(start_label.clone());
 
-        unprocessed.insert(self.start_depot, HashSet::from([start_label.clone()]));
+        unprocessed.insert(self.start_depot, BTreeSet::from([start_label.clone()]));
 
         while let Some(label_to_expand) = label_queue.pop() {
             let next_node_to_expand = label_to_expand.last_node as usize;
@@ -190,7 +202,7 @@ impl Pricer {
                 .insert(label_to_expand.clone());
         }
 
-        let empty_set = HashSet::new();
+        let empty_set = BTreeSet::new();
         let mut redcost_labels = vec![] as Vec<(Vec<usize>, Vec<usize>, f64, f64)>;
         let labels_at_end_depot = match unprocessed.get(&self.end_depot) {
             Some(l) => Box::new(l),
@@ -204,7 +216,6 @@ impl Pricer {
                 redcost_labels.push((path, start_times, label.cost, label.reduced_cost));
             }
         }
-        redcost_labels.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
         redcost_labels
     }
 }
@@ -273,11 +284,11 @@ impl Pricer {
 
     fn _dominance_check(
         &self,
-        a: &HashSet<Rc<Label>>,
-        b: &HashSet<Rc<Label>>,
-    ) -> HashSet<Rc<Label>> {
+        a: &BTreeSet<Rc<Label>>,
+        b: &BTreeSet<Rc<Label>>,
+    ) -> BTreeSet<Rc<Label>> {
         // Which from A are dominated by a label in B
-        let mut result = HashSet::<Rc<Label>>::new();
+        let mut result = BTreeSet::<Rc<Label>>::new();
         for la in a {
             for lb in b {
                 if self.dominates(lb, la) {
@@ -289,14 +300,14 @@ impl Pricer {
         result
     }
 
-    fn is_dominated(&self, label: Rc<Label>, label_set: &HashSet<Rc<Label>>) -> bool {
-        let set_for_label = HashSet::from([Rc::clone(&label)]);
+    fn is_dominated(&self, label: Rc<Label>, label_set: &BTreeSet<Rc<Label>>) -> bool {
+        let set_for_label = BTreeSet::from([Rc::clone(&label)]);
         let dominated = self._dominance_check(&set_for_label, label_set);
         !dominated.is_empty()
     }
 
-    fn dominated_by(&self, label: Rc<Label>, label_set: &HashSet<Rc<Label>>) -> HashSet<Rc<Label>> {
-        self._dominance_check(label_set, &HashSet::from([Rc::clone(&label)]))
+    fn dominated_by(&self, label: Rc<Label>, label_set: &BTreeSet<Rc<Label>>) -> BTreeSet<Rc<Label>> {
+        self._dominance_check(label_set, &BTreeSet::from([Rc::clone(&label)]))
     }
 
     fn path_from_label(
