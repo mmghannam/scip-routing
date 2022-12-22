@@ -206,8 +206,8 @@ impl Pricer {
         }
 
         let empty_set = BTreeSet::new();
-        let mut redcost_labels = vec![] as Vec<(Vec<usize>, Vec<usize>, f64, f64)>;
-        let labels_at_end_depot = match unprocessed.get(&self.end_depot) {
+        let mut redcost_paths = vec![] as Vec<(Vec<usize>, Vec<usize>, f64, f64)>;
+        let labels_at_end_depot = match processed.get(&self.end_depot) {
             Some(l) => Box::new(l),
             None => Box::new(&empty_set),
         };
@@ -216,10 +216,11 @@ impl Pricer {
             let cost = label.reduced_cost;
             if cost < 1e-6 {
                 let (path, start_times) = self.path_from_label(&label, &pred);
-                redcost_labels.push((path, start_times, label.cost, label.reduced_cost));
+                redcost_paths.push((path, start_times, label.cost, label.reduced_cost));
             }
         }
-        redcost_labels
+        // redcost_paths.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        redcost_paths
     }
 }
 
