@@ -167,38 +167,34 @@ impl Pricer {
                 None => continue,
             };
 
-            for neighbor in neighbors {
-                if label_to_expand.visited.contains(*neighbor) {
-                    continue;
-                }
-                if deleted_edges.contains(&(label_to_expand.last_node, *neighbor)) {
-                    continue;
-                }
+            let new_label_data: Vec<_> = neighbors
+                .iter()
+                .map(|neighbor| {
+                    current_label_id += 1;
+                    self.process_label_expansion(
+                        label_to_expand.clone(),
+                        neighbor,
+                        &duals,
+                        &deleted_edges,
+                        &processed,
+                        &unprocessed,
+                        &current_label_id,
+                    )
+                })
+                .flatten()
+                .collect();
 
-                let new_label = Rc::new(self.expand_label(
-                    &label_to_expand,
-                    *neighbor,
-                    &duals,
-                    &mut current_label_id,
-                ));
-
-                if self.is_feasible(&new_label) {
-                    let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
-                    if !self.is_dominated(new_label.clone(), label_set_at_node) {
-                        label_queue.push(new_label.clone());
-                        pred.insert(new_label.id, label_to_expand.clone());
-                        if neighbor != &self.end_depot {
-                            let dominated =
-                                self.dominated_by(new_label.clone(), label_set_at_node);
-                            for label in dominated {
-                                label_set_at_node.remove(&label);
-                                pred.remove(&label.id);
-                            }
-                        }
-                        label_set_at_node.insert(new_label.clone());
-                    }
+            new_label_data.iter().for_each(|(new_label, dominated)| {
+                label_queue.push(new_label.clone());
+                pred.insert(new_label.id, label_to_expand.clone());
+                let label_set_at_node = unprocessed.get_mut(&new_label.last_node).unwrap();
+                for label in dominated {
+                    label_set_at_node.remove(label);
+                    pred.remove(&label.id);
                 }
-            }
+                label_set_at_node.insert(new_label.clone());
+            });
+
             processed
                 .get_mut(&next_node_to_expand)
                 .unwrap()
@@ -226,12 +222,49 @@ impl Pricer {
 
 // Methods visible only to rust
 impl Pricer {
+    fn process_label_expansion(
+        &self,
+        label_to_expand: Rc<Label>,
+        neighbor: &usize,
+        duals: &BTreeMap<usize, f64>,
+        deleted_edges: &BTreeSet<(usize, usize)>,
+        processed: &BTreeMap<usize, BTreeSet<Rc<Label>>>,
+        unprocessed: &BTreeMap<usize, BTreeSet<Rc<Label>>>,
+        current_label_id: &usize,
+    ) -> Option<(Rc<Label>, BTreeSet<Rc<Label>>)> {
+        if label_to_expand.visited.contains(*neighbor) {
+            return None;
+        }
+        if deleted_edges.contains(&(label_to_expand.last_node, *neighbor)) {
+            return None;
+        }
+
+        let new_label =
+            Rc::new(self.expand_label(&label_to_expand, *neighbor, &duals, current_label_id));
+
+        if self.is_feasible(&new_label) {
+            let label_set_at_node = unprocessed
+                .get(neighbor)
+                .unwrap();
+                // .iter()
+                // .chain(processed.get(neighbor).unwrap())
+                // .cloned()
+                // .collect::<BTreeSet<_>>();
+            if !self.is_dominated(new_label.clone(), &label_set_at_node) {
+                if neighbor != &self.end_depot {
+                    let dominated = self.dominated_by(new_label.clone(), &label_set_at_node);
+                    return Some((new_label, dominated));
+                }
+            }
+        }
+        None
+    }
     fn expand_label(
         &self,
         label_to_expand: &Label,
         neighbor: usize,
         duals: &BTreeMap<usize, f64>,
-        current_label_id: &mut usize,
+        current_label_id: &usize,
     ) -> Label {
         let distance = self.drive_time[label_to_expand.last_node][neighbor];
         let last_node = label_to_expand.last_node;
@@ -260,8 +293,6 @@ impl Pricer {
             next_earliest_time,
             visited,
         );
-
-        *current_label_id += 1;
 
         new_label
     }
