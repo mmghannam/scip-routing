@@ -158,7 +158,7 @@ impl Pricer {
 
         label_queue.push(start_label.clone());
 
-        unprocessed.insert(self.start_depot, BTreeSet::from([start_label.clone()]));
+        unprocessed.insert(self.start_depot, BTreeSet::from([start_label]));
 
         while let Some(label_to_expand) = label_queue.pop() {
             let next_node_to_expand = label_to_expand.last_node as usize;
@@ -189,7 +189,7 @@ impl Pricer {
                         pred.insert(new_label.id, label_to_expand.clone());
                         if neighbor != &self.end_depot {
                             let dominated =
-                                self.dominated_by(new_label.clone(), &label_set_at_node);
+                                self.dominated_by(new_label.clone(), label_set_at_node);
                             for label in dominated {
                                 label_set_at_node.remove(&label);
                                 pred.remove(&label.id);
@@ -212,10 +212,10 @@ impl Pricer {
             None => Box::new(&empty_set),
         };
 
-        for label in labels_at_end_depot.into_iter() {
+        for label in labels_at_end_depot.iter() {
             let cost = label.reduced_cost;
             if cost < 1e-6 {
-                let (path, start_times) = self.path_from_label(&label, &pred);
+                let (path, start_times) = self.path_from_label(label, &pred);
                 redcost_paths.push((path, start_times, label.cost, label.reduced_cost));
             }
         }
