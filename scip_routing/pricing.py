@@ -264,17 +264,22 @@ class Pricer(scip.Pricer):
             else:
                 done = True
 
-        lowerbound = self.model.getLPObjVal() + min_redcost if self.get_elementary() else - float("inf")
+        
+        result = {}
+        if self.get_elementary():
+            lowerbound = self.model.getLPObjVal() + min_redcost
+        else:
+            lowerbound = None
+        
         self.set_elementary(False)
         if self.verbosity >= 2:
             print(f"at{self.model.getCurrentNode().getNumber()}, LP obj:", self.model.getLPObjVal())
-            if lowerbound < self.model.getCurrentNode().getLowerbound():
-                print("lowerbound", self.model.getLPObjVal() + min_redcost)
-        return {
-            "result": scip.SCIP_RESULT.SUCCESS,
-            "lowerbound": lowerbound
-        }
-
+            if lowerbound and lowerbound > self.model.getCurrentNode().getLowerbound():
+                print("updated lowerbound from", self.model.getCurrentNode().getLowerbound(), "to" , lowerbound)
+                result["lowerbound"] = lowerbound
+        result["result"] = scip.SCIP_RESULT.SUCCESS
+        return result
+    
     def set_elementary(self, val):
         if self.strategy == "py":
             self.elementary = val
