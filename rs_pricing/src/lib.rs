@@ -1,6 +1,7 @@
 use bit_set::BitSet;
 use pyo3::prelude::*;
-use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
+use rayon::prelude::*;
+use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, sync::Arc};
 
 #[pymodule]
 fn rs_pricing(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -125,10 +126,10 @@ impl Pricer {
         duals: BTreeMap<usize, f64>,
         deleted_edges: BTreeSet<(usize, usize)>,
     ) -> Vec<(Vec<usize>, Vec<usize>, f64, f64)> {
-        let mut processed = BTreeMap::<usize, BTreeSet<Rc<Label>>>::new();
-        let mut unprocessed = BTreeMap::<usize, BTreeSet<Rc<Label>>>::new();
+        let mut processed = BTreeMap::<usize, BTreeSet<Arc<Label>>>::new();
+        let mut unprocessed = BTreeMap::<usize, BTreeSet<Arc<Label>>>::new();
 
-        let mut pred = BTreeMap::<usize, Rc<Label>>::new();
+        let mut pred = BTreeMap::<usize, Arc<Label>>::new();
 
         for customer in self.customers.iter() {
             unprocessed.insert(*customer, BTreeSet::new());
@@ -142,7 +143,7 @@ impl Pricer {
 
         let mut current_label_id = 1;
 
-        let start_label = Rc::new(Label::new(
+        let start_label = Arc::new(Label::new(
             current_label_id,
             self.start_depot,
             0.0,
@@ -154,7 +155,7 @@ impl Pricer {
 
         current_label_id += 1;
 
-        let mut label_queue = Vec::<Rc<Label>>::new();
+        let mut label_queue = Vec::<Arc<Label>>::new();
 
         label_queue.push(start_label.clone());
 
@@ -169,7 +170,7 @@ impl Pricer {
 
             let new_label_data: Vec<_> = neighbors
                 .iter()
-                .map(|neighbor| {
+                .filter_map(|neighbor| {
                     current_label_id += 1;
                     self.process_label_expansion(
                         label_to_expand.clone(),
@@ -181,16 +182,18 @@ impl Pricer {
                         &current_label_id,
                     )
                 })
-                .flatten()
                 .collect();
 
-            new_label_data.iter().for_each(|(new_label, dominated)| {
+            // println!("new_label_data: {:?}", new_label_data);
+            new_label_data.into_iter().for_each(|(new_label, dominated)| {
                 label_queue.push(new_label.clone());
                 pred.insert(new_label.id, label_to_expand.clone());
                 let label_set_at_node = unprocessed.get_mut(&new_label.last_node).unwrap();
-                for label in dominated {
-                    label_set_at_node.remove(label);
-                    pred.remove(&label.id);
+                if new_label.last_node != self.end_depot {
+                    for label in dominated {
+                        label_set_at_node.remove(&label);
+                        pred.remove(&label.id);
+                    }
                 }
                 label_set_at_node.insert(new_label.clone());
             });
@@ -224,14 +227,14 @@ impl Pricer {
 impl Pricer {
     fn process_label_expansion(
         &self,
-        label_to_expand: Rc<Label>,
+        label_to_expand: Arc<Label>,
         neighbor: &usize,
         duals: &BTreeMap<usize, f64>,
         deleted_edges: &BTreeSet<(usize, usize)>,
-        processed: &BTreeMap<usize, BTreeSet<Rc<Label>>>,
-        unprocessed: &BTreeMap<usize, BTreeSet<Rc<Label>>>,
+        processed: &BTreeMap<usize, BTreeSet<Arc<Label>>>,
+        unprocessed: &BTreeMap<usize, BTreeSet<Arc<Label>>>,
         current_label_id: &usize,
-    ) -> Option<(Rc<Label>, BTreeSet<Rc<Label>>)> {
+    ) -> Option<(Arc<Label>, BTreeSet<Arc<Label>>)> {
         if label_to_expand.visited.contains(*neighbor) {
             return None;
         }
@@ -240,21 +243,19 @@ impl Pricer {
         }
 
         let new_label =
-            Rc::new(self.expand_label(&label_to_expand, *neighbor, &duals, current_label_id));
+            Arc::new(self.expand_label(&label_to_expand, *neighbor, &duals, current_label_id));
 
         if self.is_feasible(&new_label) {
             let label_set_at_node = unprocessed
                 .get(neighbor)
-                .unwrap();
-                // .iter()
-                // .chain(processed.get(neighbor).unwrap())
-                // .cloned()
-                // .collect::<BTreeSet<_>>();
+                .unwrap()
+                .iter()
+                .chain(processed.get(neighbor).unwrap())
+                .cloned()
+                .collect::<BTreeSet<_>>();
             if !self.is_dominated(new_label.clone(), &label_set_at_node) {
-                if neighbor != &self.end_depot {
-                    let dominated = self.dominated_by(new_label.clone(), &label_set_at_node);
-                    return Some((new_label, dominated));
-                }
+                let dominated = self.dominated_by(new_label.clone(), &label_set_at_node);
+                return Some((new_label, dominated));
             }
         }
         None
@@ -319,11 +320,11 @@ impl Pricer {
 
     fn _dominance_check(
         &self,
-        a: &BTreeSet<Rc<Label>>,
-        b: &BTreeSet<Rc<Label>>,
-    ) -> BTreeSet<Rc<Label>> {
+        a: &BTreeSet<Arc<Label>>,
+        b: &BTreeSet<Arc<Label>>,
+    ) -> BTreeSet<Arc<Label>> {
         // Which from A are dominated by a label in B
-        let mut result = BTreeSet::<Rc<Label>>::new();
+        let mut result = BTreeSet::<Arc<Label>>::new();
         for la in a {
             for lb in b {
                 if self.dominates(lb, la) {
@@ -335,24 +336,24 @@ impl Pricer {
         result
     }
 
-    fn is_dominated(&self, label: Rc<Label>, label_set: &BTreeSet<Rc<Label>>) -> bool {
-        let set_for_label = BTreeSet::from([Rc::clone(&label)]);
+    fn is_dominated(&self, label: Arc<Label>, label_set: &BTreeSet<Arc<Label>>) -> bool {
+        let set_for_label = BTreeSet::from([Arc::clone(&label)]);
         let dominated = self._dominance_check(&set_for_label, label_set);
         !dominated.is_empty()
     }
 
     fn dominated_by(
         &self,
-        label: Rc<Label>,
-        label_set: &BTreeSet<Rc<Label>>,
-    ) -> BTreeSet<Rc<Label>> {
-        self._dominance_check(label_set, &BTreeSet::from([Rc::clone(&label)]))
+        label: Arc<Label>,
+        label_set: &BTreeSet<Arc<Label>>,
+    ) -> BTreeSet<Arc<Label>> {
+        self._dominance_check(label_set, &BTreeSet::from([Arc::clone(&label)]))
     }
 
     fn path_from_label(
         &self,
         label: &Label,
-        pred: &BTreeMap<usize, Rc<Label>>,
+        pred: &BTreeMap<usize, Arc<Label>>,
     ) -> (Vec<usize>, Vec<usize>) {
         let mut path = Vec::<usize>::new();
         let mut start_times = Vec::<usize>::new();
