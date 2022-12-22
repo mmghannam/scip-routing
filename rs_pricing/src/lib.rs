@@ -1,6 +1,6 @@
-use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash, rc::Rc};
 use bit_set::BitSet;
 use pyo3::prelude::*;
+use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash, rc::Rc};
 
 #[pymodule]
 fn rs_pricing(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -99,14 +99,14 @@ impl Pricer {
         }
     }
 
-     fn get_elementary(&self) -> PyResult<bool> {
+    fn get_elementary(&self) -> PyResult<bool> {
         Ok(self.elementary)
-     }
+    }
 
-     fn set_elementary(&mut self, value: bool) -> PyResult<()> {
+    fn set_elementary(&mut self, value: bool) -> PyResult<()> {
         self.elementary = value;
         Ok(())
-     }
+    }
 
     fn find_path(
         &self,
@@ -178,6 +178,7 @@ impl Pricer {
                         let dominated = self.dominated_by(new_label.clone(), &label_set_at_node);
                         for label in dominated {
                             label_set_at_node.remove(&label);
+                            pred.remove(&label.id);
                         }
                         label_set_at_node.insert(new_label.clone());
                     }
@@ -191,7 +192,7 @@ impl Pricer {
 
         let empty_set = HashSet::new();
         let mut redcost_labels = vec![] as Vec<(Vec<usize>, Vec<usize>, f64, f64)>;
-        let labels_at_end_depot = match processed.get(&self.end_depot) {
+        let labels_at_end_depot = match unprocessed.get(&self.end_depot) {
             Some(l) => Box::new(l),
             None => Box::new(&empty_set),
         };
@@ -264,8 +265,7 @@ impl Pricer {
             || la.demand < lb.demand;
         let dominates_non_elementary = less_then_or_eq && one_is_less;
         if self.elementary {
-            dominates_non_elementary && la.visited.is_subset(&lb
-                .visited)
+            dominates_non_elementary && la.visited.is_subset(&lb.visited)
         } else {
             dominates_non_elementary
         }
