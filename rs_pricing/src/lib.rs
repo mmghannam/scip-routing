@@ -1,6 +1,6 @@
 use bit_set::BitSet;
 use pyo3::prelude::*;
-use std::{cmp::max, collections::HashMap, collections::BTreeSet, hash::Hash, rc::Rc};
+use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
 
 #[pymodule]
 fn rs_pricing(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -78,7 +78,7 @@ struct Pricer {
     start_depot: usize,
     end_depot: usize,
     drive_time: Vec<Vec<usize>>,
-    neighbors: HashMap<usize, Vec<usize>>,
+    neighbors: BTreeMap<usize, Vec<usize>>,
     elementary: bool,
 }
 
@@ -95,7 +95,7 @@ impl Pricer {
         start_depot: usize,
         end_depot: usize,
         drive_time: Vec<Vec<usize>>,
-        neighbors: HashMap<usize, Vec<usize>>,
+        neighbors: BTreeMap<usize, Vec<usize>>,
     ) -> Self {
         Self {
             demands,
@@ -122,13 +122,13 @@ impl Pricer {
 
     fn find_path(
         &self,
-        duals: HashMap<usize, f64>,
+        duals: BTreeMap<usize, f64>,
         deleted_edges: BTreeSet<(usize, usize)>,
     ) -> Vec<(Vec<usize>, Vec<usize>, f64, f64)> {
-        let mut processed = HashMap::<usize, BTreeSet<Rc<Label>>>::new();
-        let mut unprocessed = HashMap::<usize, BTreeSet<Rc<Label>>>::new();
+        let mut processed = BTreeMap::<usize, BTreeSet<Rc<Label>>>::new();
+        let mut unprocessed = BTreeMap::<usize, BTreeSet<Rc<Label>>>::new();
 
-        let mut pred = HashMap::<usize, Rc<Label>>::new();
+        let mut pred = BTreeMap::<usize, Rc<Label>>::new();
 
         for customer in self.customers.iter() {
             unprocessed.insert(*customer, BTreeSet::new());
@@ -187,10 +187,13 @@ impl Pricer {
                     if !self.is_dominated(new_label.clone(), label_set_at_node) {
                         label_queue.push(new_label.clone());
                         pred.insert(new_label.id, label_to_expand.clone());
-                        let dominated = self.dominated_by(new_label.clone(), &label_set_at_node);
-                        for label in dominated {
-                            label_set_at_node.remove(&label);
-                            pred.remove(&label.id);
+                        if neighbor != &self.end_depot {
+                            let dominated =
+                                self.dominated_by(new_label.clone(), &label_set_at_node);
+                            for label in dominated {
+                                label_set_at_node.remove(&label);
+                                pred.remove(&label.id);
+                            }
                         }
                         label_set_at_node.insert(new_label.clone());
                     }
@@ -226,7 +229,7 @@ impl Pricer {
         &self,
         label_to_expand: &Label,
         neighbor: usize,
-        duals: &HashMap<usize, f64>,
+        duals: &BTreeMap<usize, f64>,
         current_label_id: &mut usize,
     ) -> Label {
         let distance = self.drive_time[label_to_expand.last_node][neighbor];
@@ -306,14 +309,18 @@ impl Pricer {
         !dominated.is_empty()
     }
 
-    fn dominated_by(&self, label: Rc<Label>, label_set: &BTreeSet<Rc<Label>>) -> BTreeSet<Rc<Label>> {
+    fn dominated_by(
+        &self,
+        label: Rc<Label>,
+        label_set: &BTreeSet<Rc<Label>>,
+    ) -> BTreeSet<Rc<Label>> {
         self._dominance_check(label_set, &BTreeSet::from([Rc::clone(&label)]))
     }
 
     fn path_from_label(
         &self,
         label: &Label,
-        pred: &HashMap<usize, Rc<Label>>,
+        pred: &BTreeMap<usize, Rc<Label>>,
     ) -> (Vec<usize>, Vec<usize>) {
         let mut path = Vec::<usize>::new();
         let mut start_times = Vec::<usize>::new();
