@@ -14,4 +14,4 @@ incremental = true
 
 [dependencies]
 pyo3 = { version = "0.17.3", features = ["extension-module"] }
-bit-set = "0.4.0"
+bit-set = "0.5.3"
