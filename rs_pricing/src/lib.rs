@@ -1,4 +1,5 @@
 use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash, rc::Rc};
+use std::collections::BinaryHeap;
 
 use pyo3::prelude::*;
 
@@ -52,6 +53,20 @@ impl Eq for Label {}
 impl Hash for Label {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
+    }
+}
+
+impl Ord for Label {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.earliest_time
+            .cmp(&other.earliest_time).reverse()
+            .then(self.id.cmp(&other.id))
+    }
+}
+
+impl PartialOrd for Label {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -131,7 +146,8 @@ impl Pricer {
 
         current_label_id += 1;
 
-        let mut label_queue = Vec::<Rc<Label>>::new();
+        // let mut label_queue = Vec::<Rc<Label>>::new();
+        let mut label_queue = BinaryHeap::<Rc<Label>>::new();
 
         label_queue.push(start_label.clone());
 
