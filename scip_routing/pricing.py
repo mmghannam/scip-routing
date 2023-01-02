@@ -56,6 +56,8 @@ class Pricer(scip.Pricer):
         self.strategy = strategy
         if strategy == "rust":
             self.rust_pricer = self.init_rust_pricer()
+        
+        self.elementary = False
 
     def init_rust_pricer(self) -> RustPricer:
         drive_times = self.instance.distances
@@ -223,7 +225,8 @@ class Pricer(scip.Pricer):
                         label_a.earliest_time <= label_b.earliest_time
         one_is_strictly_less = label_a.cost < label_b.cost or label_a.demand < label_b.demand or \
                                label_a.earliest_time < label_b.earliest_time
-        return is_less_or_eq and one_is_strictly_less
+        subset = not self.elementary or label_a.visited.issubset(label_b.visited)
+        return is_less_or_eq and one_is_strictly_less and subset
 
     def pricerredcost(self, *args, **kwargs):
         duals = {self.start_depot: 0}
@@ -234,32 +237,61 @@ class Pricer(scip.Pricer):
         n_added_paths = 0
         min_redcost = 0
 
-        for path, start_times, cost, redcost in self.find_path(duals):
-            path_name =str((*path,))
-            if path_name not in self.added_paths:
-                if redcost < min_redcost:
-                    min_redcost = redcost
-                n_added_paths += 1
-                if self.verbosity >= 3:
-                    print(path, start_times, cost, redcost)
+        done = False
 
-                var = self.model.addVar(name=f"{str(path)}", obj=cost, vtype="B",
-                                        pricedVar=True)
-                self.added_paths[path_name] = var
-                cust_i_in_path = defaultdict(lambda: 0)
-                for x in path:
-                    cust_i_in_path[x] += 1
-                for i, cons in enumerate(self.init_cons):
-                    if cust_i_in_path[i + 1] > 0:
-                        # print(i + 1, cust_i_in_path[i + 1])
-                        self.model.addConsCoeff(cons, var, cust_i_in_path[i + 1])
+        while not done:
+            for path, start_times, cost, redcost in self.find_path(duals):
+                path_name =str((*path,))
+                if path_name not in self.added_paths:
+                    if redcost < min_redcost:
+                        min_redcost = redcost
+                    n_added_paths += 1
+                    if self.verbosity >= 3:
+                        print(path, start_times, cost, redcost)
+
+                    var = self.model.addVar(name=f"{str(path)}", obj=cost, vtype="B",
+                                            pricedVar=True)
+                    self.added_paths[path_name] = var
+                    cust_i_in_path = defaultdict(lambda: 0)
+                    for x in path:
+                        cust_i_in_path[x] += 1
+                    for i, cons in enumerate(self.init_cons):
+                        if cust_i_in_path[i + 1] > 0:
+                            # print(i + 1, cust_i_in_path[i + 1])
+                            self.model.addConsCoeff(cons, var, cust_i_in_path[i + 1])
+            if min_redcost == 0 and not self.get_elementary():
+                self.set_elementary(True)
+            else:
+                done = True
+
+        
+        result = {}
+        if self.get_elementary():
+            lowerbound = self.model.getLPObjVal() + min_redcost
+        else:
+            lowerbound = None
+        
+        self.set_elementary(False)
         if self.verbosity >= 2:
             print(f"at{self.model.getCurrentNode().getNumber()}, LP obj:", self.model.getLPObjVal())
-            # print("lowerbound", self.model.getLPObjVal() + min_redcost)
-        return {
-            "result": scip.SCIP_RESULT.SUCCESS,
-            "lowerbound": self.model.getLPObjVal() + min_redcost
-        }
+            if lowerbound and lowerbound > self.model.getCurrentNode().getLowerbound():
+                print("updated lowerbound from", self.model.getCurrentNode().getLowerbound(), "to" , lowerbound)
+                result["lowerbound"] = lowerbound
+        result["result"] = scip.SCIP_RESULT.SUCCESS
+        return result
+    
+    def set_elementary(self, val):
+        if self.strategy == "py":
+            self.elementary = val
+        elif self.strategy == "rust":
+            self.rust_pricer.set_elementary(val)
+
+    def get_elementary(self):
+        if self.strategy == "py":
+            return self.elementary
+        elif self.strategy == "rust":
+            return self.rust_pricer.get_elementary()
+
 
     def pricerinit(self):
         for i, c in enumerate(self.init_cons):

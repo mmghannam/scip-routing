@@ -8,5 +8,10 @@ edition = "2021"
 name = "rs_pricing"
 crate-type = ["cdylib"]
 
+
+[profile.release]
+incremental = true 
+
 [dependencies]
 pyo3 = { version = "0.17.3", features = ["extension-module"] }
+bit-set = "0.5.3"
