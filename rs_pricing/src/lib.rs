@@ -2,7 +2,6 @@ use bit_set::BitSet;
 use pyo3::prelude::*;
 use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
 
-
 static mut LABEL_ID: usize = 0;
 
 #[pymodule]
@@ -186,7 +185,9 @@ impl Pricer {
                 if self.is_feasible(&new_label) {
                     let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
                     let label_set_at_node_processed = processed.get(neighbor).unwrap();
-                    if !self.is_dominated(new_label.clone(), &label_set_at_node) && !self.is_dominated(new_label.clone(), &label_set_at_node_processed) {
+                    if !self.is_dominated(new_label.clone(), &label_set_at_node)
+                        && !self.is_dominated(new_label.clone(), &label_set_at_node_processed)
+                    {
                         label_queue.push(new_label.clone());
                         if neighbor != &self.end_depot {
                             let dominated =
