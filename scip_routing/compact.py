@@ -4,7 +4,7 @@ def solve(graph, instance, number_of_vehicles, print_solution=True, verbosity=0)
     
     if verbosity == 0:
         model.hideOutput()
-        
+
     start_depot = instance.depot
     end_depot = instance.n_customers + 1
     earliest = instance.earliest + [instance.earliest[start_depot]]
@@ -75,8 +75,6 @@ def solve(graph, instance, number_of_vehicles, print_solution=True, verbosity=0)
     
     model.optimize()
 
-    print("Status is:", model.getStatus())
-
     if print_solution: 
         if model.getStatus() == "optimal":
             print("Optimal solution found")
@@ -84,7 +82,7 @@ def solve(graph, instance, number_of_vehicles, print_solution=True, verbosity=0)
                 print(f"Vehicle {k}")
                 for i, j in graph.edges:
                     if model.getVal(vars[i, j, k]) > 0.5:
-                        print(f"Edge {i} -> {j}")
+                        print(f"Edge {i} -> {j}: obj: {vars[i, j, k].getObj()}")
                         print(f"Arrival time at {i} -> {model.getVal(start_vars[i, k])}")
                 print(f"Start time: {model.getVal(start_vars[start_depot, k])}")
                 print(f"End time: {model.getVal(start_vars[end_depot, k])}")

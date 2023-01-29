@@ -2,6 +2,9 @@ use bit_set::BitSet;
 use pyo3::prelude::*;
 use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
 
+
+static mut LABEL_ID: usize = 0;
+
 #[pymodule]
 fn rs_pricing(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Pricer>()?;
@@ -21,7 +24,6 @@ struct Label {
 
 impl Label {
     fn new(
-        id: usize,
         last_node: usize,
         cost: f64,
         reduced_cost: f64,
@@ -29,6 +31,10 @@ impl Label {
         earliest_time: usize,
         visited: BitSet,
     ) -> Self {
+        let id = unsafe {
+            LABEL_ID += 1;
+            LABEL_ID
+        };
         Self {
             id,
             last_node,
@@ -140,10 +146,7 @@ impl Pricer {
         processed.insert(self.start_depot, BTreeSet::new());
         processed.insert(self.end_depot, BTreeSet::new());
 
-        let mut current_label_id = 1;
-
         let start_label = Rc::new(Label::new(
-            current_label_id,
             self.start_depot,
             0.0,
             0.0,
@@ -151,8 +154,6 @@ impl Pricer {
             self.time_windows[self.start_depot].0,
             BitSet::with_capacity(self.customers.len() + 2),
         ));
-
-        current_label_id += 1;
 
         let mut label_queue = Vec::<Rc<Label>>::new();
 
@@ -179,24 +180,23 @@ impl Pricer {
                     &label_to_expand,
                     *neighbor,
                     &duals,
-                    &mut current_label_id,
                 ));
 
+                
                 if self.is_feasible(&new_label) {
                     let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
-                    let label_set_at_node_processed = processed.get_mut(neighbor).unwrap();
+                    let label_set_at_node_processed = processed.get(neighbor).unwrap();
                     if !self.is_dominated(new_label.clone(), &label_set_at_node) && !self.is_dominated(new_label.clone(), &label_set_at_node_processed) {
                         label_queue.push(new_label.clone());
-                        pred.insert(new_label.id, label_to_expand.clone());
                         if neighbor != &self.end_depot {
                             let dominated =
                                 self.dominated_by(new_label.clone(), &label_set_at_node);
                             for label in dominated {
                                 label_set_at_node.remove(&label);
-                                pred.remove(&label.id);
                             }
                         }
                         label_set_at_node.insert(new_label.clone());
+                        pred.insert(new_label.id, label_to_expand.clone());
                     }
                 }
             }
@@ -232,7 +232,6 @@ impl Pricer {
         label_to_expand: &Label,
         neighbor: usize,
         duals: &BTreeMap<usize, f64>,
-        current_label_id: &mut usize,
     ) -> Label {
         let distance = self.drive_time[label_to_expand.last_node][neighbor];
         let last_node = label_to_expand.last_node;
@@ -253,7 +252,6 @@ impl Pricer {
         visited.insert(neighbor);
 
         let new_label = Label::new(
-            *current_label_id,
             neighbor,
             cost,
             reduced_cost,
@@ -261,8 +259,6 @@ impl Pricer {
             next_earliest_time,
             visited,
         );
-
-        *current_label_id += 1;
 
         new_label
     }
