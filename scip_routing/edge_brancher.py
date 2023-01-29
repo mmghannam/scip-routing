@@ -29,6 +29,8 @@ class EdgeBrancher(scip.Branchrule):
         # choose an edge (i,j) to branch on
         edge_count = defaultdict(lambda: 0)
         for var in self.model.getVars(transformed=True):
+            if var.getUbLocal() < EPSILON:
+                continue
             var_edges = var_to_edges(var)
             for e in var_edges:
                 edge_count[e] += 1
