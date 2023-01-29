@@ -43,6 +43,7 @@ class VRPTWSolver:
     def solve(self):
         self.rmp.setHeuristics(scip.SCIP_PARAMSETTING.OFF)
         self.rmp.setPresolve(scip.SCIP_PARAMSETTING.OFF)
+        self.rmp.setSeparating(scip.SCIP_PARAMSETTING.OFF)
         self.rmp.disablePropagation()
 
         # include edge branching rule and its event handler
