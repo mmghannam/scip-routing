@@ -1,5 +1,5 @@
 import pyscipopt as scip
-def solve(graph, instance, number_of_vehicles, print_solution=True, verbosity=0): 
+def solve(graph, instance, number_of_vehicles, verbosity=0): 
     model = scip.Model()
     
     if verbosity == 0:
@@ -65,7 +65,7 @@ def solve(graph, instance, number_of_vehicles, print_solution=True, verbosity=0)
             model.addCons(s * outgoing_edge_vars <= start_vars[customer, k])
             model.addCons(start_vars[customer, k] <= e * outgoing_edge_vars)
     
-    bigM = max(latest[j] + service_times[i] + graph[i][j]["distance"] - earliest[i] for i, j in graph.edges)
+    bigM = max(earliest[i] + service_times[i] + graph[i][j]["distance"] for i, j in graph.edges)
     for k in range(number_of_vehicles):
         for i, j in graph.edges:
             # nonlinear version
@@ -75,7 +75,7 @@ def solve(graph, instance, number_of_vehicles, print_solution=True, verbosity=0)
     
     model.optimize()
 
-    if print_solution: 
+    if verbosity > 0: 
         if model.getStatus() == "optimal":
             print("Optimal solution found")
             for k in range(number_of_vehicles):
