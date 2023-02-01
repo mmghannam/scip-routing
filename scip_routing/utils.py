@@ -11,7 +11,8 @@ def instance_graph(instance: VRPTW):
     # edges between customers
     for ci in instance.customers:
         for cj in instance.customers:
-            graph.add_edge(ci, cj, distance=instance.distances[ci][cj])
+            if ci != cj:
+                graph.add_edge(ci, cj, distance=instance.distances[ci][cj])
 
     # edges from start depot
     for c in instance.customers:
@@ -21,6 +22,7 @@ def instance_graph(instance: VRPTW):
     end_depot = instance.n_customers + 1
     for c in instance.customers:
         graph.add_edge(c, end_depot, distance=instance.distances[c][instance.depot])
+    graph.add_edge(instance.depot, end_depot, distance=0)
 
     return graph
 

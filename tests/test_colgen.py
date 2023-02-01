@@ -2,7 +2,7 @@ import cvrplib
 
 from scip_routing.solver import VRPTWSolver
 from scip_routing.utils import minify_instance, instance_graph
-
+from scip_routing.compact import solve
 
 def test_finds_optimal():
     instance, sol = cvrplib.download('R101', solution=True)
@@ -23,3 +23,16 @@ def test_finds_optimal():
     rust_solver.solve()
 
     assert py_solver.rmp.getObjVal() == rust_solver.rmp.getObjVal() == 1031
+
+def test_same_answer_as_compact():
+    instance, sol = cvrplib.download('R101', solution=True)
+    instance = minify_instance(instance, 10)
+    graph = instance_graph(instance)
+    rust_solver = VRPTWSolver(graph=graph,
+                         instance=instance,
+                         verbosity=1,
+                         pricing_strategy="rust")
+    rust_solver.solve()
+    obj_colgen = rust_solver.rmp.getObjVal()
+    obj_compact = solve(instance, graph).getObjVal()
+    assert obj_colgen == obj_compact

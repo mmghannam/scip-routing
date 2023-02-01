@@ -43,6 +43,7 @@ class VRPTWSolver:
     def solve(self):
         self.rmp.setHeuristics(scip.SCIP_PARAMSETTING.OFF)
         self.rmp.setPresolve(scip.SCIP_PARAMSETTING.OFF)
+        self.rmp.setSeparating(scip.SCIP_PARAMSETTING.OFF)
         self.rmp.disablePropagation()
 
         # include edge branching rule and its event handler
@@ -56,9 +57,10 @@ class VRPTWSolver:
         self.rmp.setParam("display/headerfreq", 1)
         self.rmp.setObjIntegral()
         self.rmp.optimize()
-        solution = self.rmp.getBestSol()
-        print("Best solution found:")
-        for var in self.rmp.getVars(transformed=True):
-            solval = solution[var]
-            if solval > 1e-6:
-                print(var, var.getObj(), solval)
+        if self.verbosity > 0:
+            solution = self.rmp.getBestSol()
+            print("Best solution found:")
+            for var in self.rmp.getVars(transformed=True):
+                solval = solution[var]
+                if solval > 1e-6:
+                    print(var, var.getObj(), solval)

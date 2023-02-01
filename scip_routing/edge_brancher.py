@@ -22,13 +22,15 @@ class EdgeBrancher(scip.Branchrule):
             for edge in var_edges:
                 edges[edge] += sol_vals[i]
 
-        fractional_edges = [edge for edge, v in edges.items() if EPSILON < v < 1 - EPSILON]
+        fractional_edges = [edge for edge, v in edges.items() if EPSILON < v < 1 - EPSILON and edge[0] != 0 and edge[1] != 0]
 
         assert (len(fractional_edges) > 0)
 
         # choose an edge (i,j) to branch on
         edge_count = defaultdict(lambda: 0)
         for var in self.model.getVars(transformed=True):
+            if var.getUbLocal() < EPSILON:
+                continue
             var_edges = var_to_edges(var)
             for e in var_edges:
                 edge_count[e] += 1
