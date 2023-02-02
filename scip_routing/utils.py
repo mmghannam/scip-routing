@@ -1,8 +1,8 @@
+from ast import literal_eval as make_tuple
 from functools import lru_cache
 
-from cvrplib.Instance import VRPTW
 import networkx as nx
-from ast import literal_eval as make_tuple
+from cvrplib.Instance import VRPTW
 
 
 def instance_graph(instance: VRPTW):
@@ -28,15 +28,25 @@ def instance_graph(instance: VRPTW):
 
 
 def minify_instance(instance, only_first):
-    instance.customers = instance.customers[:only_first]
-    instance.earliest = instance.earliest[:only_first + 1]
-    instance.latest = instance.latest[:only_first + 1]
-    instance.demands = instance.demands[:only_first + 1]
-    instance.distances = instance.distances[:only_first + 1]
+    distances = [[0] * (only_first + 1) for _ in range(only_first + 1)]
     for i in range(only_first + 1):
-        instance.distances[i] = instance.distances[i][:only_first + 1]
-    instance.n_customers = only_first
-    return instance
+        for j in range(only_first + 1):
+            distances[i][j] = instance.distances[i][j]
+    return VRPTW(
+        n_vehicles=instance.n_vehicles,
+        earliest=instance.earliest[:only_first + 1],
+        latest=instance.latest[:only_first + 1],
+        name=instance.name,
+        dimension=instance.dimension,
+        n_customers=only_first,
+        depot= instance.depot,
+        customers=instance.customers[:only_first],
+        capacity=instance.capacity,
+        distances=distances,
+        demands=instance.demands[:only_first+1],
+        service_times=instance.service_times[:only_first+1],
+        coordinates=instance.coordinates[:only_first+1]
+    )
 
 
 def var_to_edges(var):

@@ -1,9 +1,17 @@
 from collections import defaultdict
 
+import pyscipopt as scip
+
 from scip_routing.edge_brancher import EdgeBrancher
 from scip_routing.edge_branching_eventhdlr import EdgeBranchingEventhdlr
 from scip_routing.pricing import Pricer
-import pyscipopt as scip
+
+
+def solve_colgen(graph, instance, verbosity=0, distance_fn=None, pricing_strategy="rust"):
+    solver = VRPTWSolver(graph, instance, verbosity=verbosity, distance_fn=distance_fn,
+                         pricing_strategy=pricing_strategy)
+    solver.solve()
+    return solver.rmp
 
 
 class VRPTWSolver:

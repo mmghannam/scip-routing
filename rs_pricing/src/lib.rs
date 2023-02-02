@@ -1,5 +1,5 @@
 use bit_set::BitSet;
-use std::{cmp::max, collections::HashMap, collections::HashSet, hash::Hash, rc::Rc};
+use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
 use std::collections::BinaryHeap;
 
 use pyo3::prelude::*;
