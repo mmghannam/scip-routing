@@ -6,3 +6,5 @@ build
 .pytest_cache
 scip_routing/__pycache__
 launch.json
+.ipynb_checkpoints
+scip_routing/.ipynb_checkpoints

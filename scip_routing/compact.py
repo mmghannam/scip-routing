@@ -1,7 +1,5 @@
 import pyscipopt as scip
-
-
-def solve(graph, instance, number_of_vehicles, verbosity=0):
+def solve_compact(graph, instance, number_of_vehicles=25, verbosity=0): 
     model = scip.Model()
 
     if verbosity == 0:

@@ -1,7 +1,8 @@
 use bit_set::BitSet;
-use pyo3::prelude::*;
 use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
+use std::collections::BinaryHeap;
 
+use pyo3::prelude::*;
 static mut LABEL_ID: usize = 0;
 
 #[pymodule]
@@ -60,15 +61,17 @@ impl Hash for Label {
     }
 }
 
-impl PartialOrd for Label {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+impl Ord for Label {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.earliest_time
+            .cmp(&other.earliest_time).reverse()
+            .then(self.id.cmp(&other.id))
     }
 }
 
-impl Ord for Label {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id.partial_cmp(&other.id).unwrap()
+impl PartialOrd for Label {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -154,7 +157,8 @@ impl Pricer {
             BitSet::with_capacity(self.customers.len() + 2),
         ));
 
-        let mut label_queue = Vec::<Rc<Label>>::new();
+        // let mut label_queue = Vec::<Rc<Label>>::new();
+        let mut label_queue = BinaryHeap::<Rc<Label>>::new();
 
         label_queue.push(start_label.clone());
 
