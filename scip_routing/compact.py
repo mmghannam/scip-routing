@@ -7,8 +7,8 @@ def solve_compact(graph, instance, number_of_vehicles=25, verbosity=0):
 
     start_depot = instance.depot
     end_depot = instance.n_customers + 1
-    earliest = instance.earliest + [instance.earliest[start_depot]]
-    latest = instance.latest + [instance.latest[start_depot]]
+    # earliest = instance.earliest + [instance.earliest[start_depot]]
+    # latest = instance.latest + [instance.latest[start_depot]]
     demands = instance.demands + [instance.demands[start_depot]]
     service_times = instance.service_times + [instance.service_times[start_depot]]
 
@@ -24,7 +24,7 @@ def solve_compact(graph, instance, number_of_vehicles=25, verbosity=0):
     for k in range(number_of_vehicles):
         for i in [start_depot, end_depot] + instance.customers:
             var_name = str((i, k))
-            var = model.addVar(obj=0, lb=0, ub=latest[i], name=var_name, vtype="C")
+            var = model.addVar(obj=0, lb=0, ub=100000, name=var_name, vtype="C")
             start_vars[i, k] = var
 
     # set objective to minimize in pyscipopt
@@ -51,20 +51,21 @@ def solve_compact(graph, instance, number_of_vehicles=25, verbosity=0):
             scip.quicksum(demands[customer] * vars[i, j, k] for customer in instance.customers for i, j in graph.edges
                           if i == customer) <= instance.capacity)
 
-    for v in range(number_of_vehicles):
-        for d in (start_depot, end_depot):
-            model.addCons(earliest[d] <= start_vars[d, v])
-            model.addCons(start_vars[d, v] <= latest[d])
+    # for v in range(number_of_vehicles):
+    #     for d in (start_depot, end_depot):
+    #         model.addCons(earliest[d] <= start_vars[d, v])
+    #         model.addCons(start_vars[d, v] <= latest[d])
 
-    for k in range(number_of_vehicles):
-        for customer in instance.customers:
-            s = instance.earliest[customer]
-            e = instance.latest[customer]
-            outgoing_edge_vars = scip.quicksum(vars[i, j, k] for i, j in graph.edges if i == customer)
-            model.addCons(s * outgoing_edge_vars <= start_vars[customer, k])
-            model.addCons(start_vars[customer, k] <= e * outgoing_edge_vars)
+    # for k in range(number_of_vehicles):
+    #     for customer in instance.customers:
+    #         s = instance.earliest[customer]
+    #         e = instance.latest[customer]
+    #         outgoing_edge_vars = scip.quicksum(vars[i, j, k] for i, j in graph.edges if i == customer)
+    #         model.addCons(s * outgoing_edge_vars <= start_vars[customer, k])
+    #         model.addCons(start_vars[customer, k] <= e * outgoing_edge_vars)
 
-    bigM = max(latest[i] + service_times[i] + graph[i][j]["distance"] for i, j in graph.edges)
+    # bigM = max(latest[i] + service_times[i] + graph[i][j]["distance"] for i, j in graph.edges)
+    bigM = 1000000
     for k in range(number_of_vehicles):
         for i, j in graph.edges:
             # nonlinear version

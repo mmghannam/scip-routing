@@ -36,8 +36,8 @@ class Pricer(scip.Pricer):
         self.deleted_edges_from_node = deleted_edges_from_node
         self.start_depot = instance.depot
         self.end_depot = instance.n_customers + 1
-        self.earliest = instance.earliest + [instance.earliest[self.start_depot]]
-        self.latest = instance.latest + [instance.latest[self.start_depot]]
+        self.earliest = [0] * (instance.n_customers + 2)
+        self.latest = [10000000] * (instance.n_customers + 2)
         self.demands = instance.demands + [instance.demands[self.start_depot]]
         self.service_times = instance.service_times + [instance.service_times[self.start_depot]]
         self.capacity = instance.capacity

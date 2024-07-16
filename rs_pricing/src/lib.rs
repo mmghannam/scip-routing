@@ -1,6 +1,6 @@
 use bit_set::BitSet;
-use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
 use std::collections::BinaryHeap;
+use std::{cmp::max, collections::BTreeMap, collections::BTreeSet, hash::Hash, rc::Rc};
 
 use pyo3::prelude::*;
 static mut LABEL_ID: usize = 0;
@@ -18,19 +18,11 @@ struct Label {
     cost: f64,
     reduced_cost: f64,
     demand: f64,
-    earliest_time: usize,
     visited: BitSet,
 }
 
 impl Label {
-    fn new(
-        last_node: usize,
-        cost: f64,
-        reduced_cost: f64,
-        demand: f64,
-        earliest_time: usize,
-        visited: BitSet,
-    ) -> Self {
+    fn new(last_node: usize, cost: f64, reduced_cost: f64, demand: f64, visited: BitSet) -> Self {
         let id = unsafe {
             LABEL_ID += 1;
             LABEL_ID
@@ -41,7 +33,6 @@ impl Label {
             cost,
             reduced_cost,
             demand,
-            earliest_time,
             visited,
         }
     }
@@ -63,8 +54,9 @@ impl Hash for Label {
 
 impl Ord for Label {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.earliest_time
-            .cmp(&other.earliest_time).reverse()
+        self.demand
+            .partial_cmp(&other.demand)
+            .unwrap()
             .then(self.id.cmp(&other.id))
     }
 }
@@ -79,8 +71,6 @@ impl PartialOrd for Label {
 #[derive(Debug)]
 struct Pricer {
     demands: Vec<usize>,
-    time_windows: Vec<(usize, usize)>,
-    service_times: Vec<usize>,
     vehicle_capacity: usize,
     customers: Vec<usize>,
     start_depot: usize,
@@ -107,8 +97,6 @@ impl Pricer {
     ) -> Self {
         Self {
             demands,
-            time_windows,
-            service_times,
             vehicle_capacity,
             customers,
             start_depot,
@@ -153,7 +141,6 @@ impl Pricer {
             0.0,
             0.0,
             0.0,
-            self.time_windows[self.start_depot].0,
             BitSet::with_capacity(self.customers.len() + 2),
         ));
 
@@ -179,13 +166,8 @@ impl Pricer {
                     continue;
                 }
 
-                let new_label = Rc::new(self.expand_label(
-                    &label_to_expand,
-                    *neighbor,
-                    &duals,
-                ));
+                let new_label = Rc::new(self.expand_label(&label_to_expand, *neighbor, &duals));
 
-                
                 if self.is_feasible(&new_label) {
                     let label_set_at_node = unprocessed.get_mut(neighbor).unwrap();
                     let label_set_at_node_processed = processed.get(neighbor).unwrap();
@@ -241,13 +223,6 @@ impl Pricer {
         let distance = self.drive_time[label_to_expand.last_node][neighbor];
         let last_node = label_to_expand.last_node;
 
-        let next_earliest_time = max(
-            label_to_expand.earliest_time
-                + self.service_times[label_to_expand.last_node]
-                + distance,
-            self.time_windows[neighbor].0,
-        );
-
         let cost = label_to_expand.cost + distance as f64;
         let reduced_cost = label_to_expand.reduced_cost + (distance as f64 - duals[&last_node]);
 
@@ -256,30 +231,18 @@ impl Pricer {
         let mut visited = label_to_expand.visited.clone();
         visited.insert(neighbor);
 
-        let new_label = Label::new(
-            neighbor,
-            cost,
-            reduced_cost,
-            accumulated_demand,
-            next_earliest_time,
-            visited,
-        );
+        let new_label = Label::new(neighbor, cost, reduced_cost, accumulated_demand, visited);
 
         new_label
     }
 
     fn is_feasible(&self, label: &Label) -> bool {
-        label.earliest_time <= self.time_windows[label.last_node].1
-            && label.demand <= self.vehicle_capacity as f64
+        label.demand <= self.vehicle_capacity as f64
     }
 
     fn dominates(&self, la: &Label, lb: &Label) -> bool {
-        let less_then_or_eq = la.earliest_time <= lb.earliest_time
-            && la.reduced_cost <= lb.reduced_cost
-            && la.demand <= lb.demand;
-        let one_is_less = la.earliest_time < lb.earliest_time
-            || la.reduced_cost < lb.reduced_cost
-            || la.demand < lb.demand;
+        let less_then_or_eq = la.reduced_cost <= lb.reduced_cost && la.demand <= lb.demand;
+        let one_is_less = la.reduced_cost < lb.reduced_cost || la.demand < lb.demand;
         let dominates_non_elementary = less_then_or_eq && one_is_less;
         if self.elementary {
             dominates_non_elementary && la.visited.is_subset(&lb.visited)
@@ -330,11 +293,9 @@ impl Pricer {
         let mut current_label = label;
         while let Some(parent) = pred.get(&current_label.id) {
             path.push(current_label.last_node);
-            start_times.push(current_label.earliest_time);
             current_label = parent;
         }
         path.push(current_label.last_node);
-        start_times.push(current_label.earliest_time);
         path.reverse();
         start_times.reverse();
         (path, start_times)
