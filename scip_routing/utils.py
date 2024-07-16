@@ -2,11 +2,22 @@ from ast import literal_eval as make_tuple
 from functools import lru_cache
 
 import networkx as nx
-from cvrplib.Instance import VRPTW
+# from vrplib.Instance import VRPTW
 
+class Instance:
+    pass
 
-def instance_graph(instance: VRPTW):
+def instance_graph(given_instance):
     graph = nx.DiGraph()
+    instance = Instance()
+    instance.n_customers = len(given_instance['demand']) - 1
+    instance.customers = list(range(1, instance.n_customers + 1))
+    instance.distances = given_instance['edge_weight'][0]
+    instance.depot = 0
+    instance.demands = list(given_instance['demand'])
+    instance.service_times = list(given_instance['service_time'])
+    instance.capacity = given_instance['capacity']
+    instance.n_vehicles = given_instance['vehicles']
 
     # edges between customers
     for ci in instance.customers:
@@ -24,29 +35,18 @@ def instance_graph(instance: VRPTW):
         graph.add_edge(c, end_depot, distance=instance.distances[c][instance.depot])
     graph.add_edge(instance.depot, end_depot, distance=0)
 
-    return graph
+    return instance, graph
 
 
 def minify_instance(instance, only_first):
     distances = [[0] * (only_first + 1) for _ in range(only_first + 1)]
     for i in range(only_first + 1):
         for j in range(only_first + 1):
-            distances[i][j] = instance.distances[i][j]
-    return VRPTW(
-        n_vehicles=instance.n_vehicles,
-        earliest=instance.earliest[:only_first + 1],
-        latest=instance.latest[:only_first + 1],
-        name=instance.name,
-        dimension=instance.dimension,
-        n_customers=only_first,
-        depot= instance.depot,
-        customers=instance.customers[:only_first],
-        capacity=instance.capacity,
-        distances=distances,
-        demands=instance.demands[:only_first+1],
-        service_times=instance.service_times[:only_first+1],
-        coordinates=instance.coordinates[:only_first+1]
-    )
+            distances[i][j] = int(instance["edge_weight"][i][j])
+    
+    instance["edge_weight"]=distances,
+    instance["demand"]=instance["demand"][:only_first+1]
+    instance["service_time"]=instance["service_time"][:only_first+1]
 
 
 def var_to_edges(var):
