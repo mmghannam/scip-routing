@@ -13,6 +13,8 @@ def instance_graph(given_instance):
     instance.n_customers = len(given_instance['demand']) - 1
     instance.customers = list(range(1, instance.n_customers + 1))
     instance.distances = given_instance['edge_weight'][0]
+    instance.earliest = [x[0] for x in given_instance['time_window']]
+    instance.latest = [x[1] for x in given_instance['time_window']]
     instance.depot = 0
     instance.demands = list(given_instance['demand'])
     instance.service_times = list(given_instance['service_time'])
